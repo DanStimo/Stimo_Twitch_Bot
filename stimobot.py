@@ -10,12 +10,6 @@ TOKEN = os.getenv("TOKEN")
 CHANNEL = os.getenv("CHANNEL")
 CLUB_ID = os.getenv("CLUB_ID")
 
-BOT_NICK = "stimobot"
-TOKEN = "oauth:rp03vciri07npevi7yrxyqlo7ozoks"
-CHANNEL = "stimo"
-CLUB_ID = "167054"
-
-
 # Load or initialize club mapping
 try:
     with open('club_mapping.json', 'r') as f:
