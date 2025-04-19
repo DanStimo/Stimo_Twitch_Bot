@@ -367,6 +367,19 @@ class Bot(commands.Bot):
                 print(f"Error in !versus command: {e}")
                 await ctx.send("An error occurred while fetching opponent stats.")
 
+@client.event
+async def on_ready():
+    await tree.sync()
+    print(f"Bot is ready as {client.user}")
+
+    channel_id = int(os.getenv("ANNOUNCE_CHANNEL_ID", "0"))  # replace with actual ID if needed
+    channel = client.get_channel(channel_id)
+
+    if channel:
+        await channel.send("✅ - omitS Bot (<:twitch:1361925662008541266>) is now online and ready for commands!")
+    else:
+        print(f"[WARN] Could not find channel with ID {channel_id}")
+
 
 if __name__ == "__main__":
     bot = Bot()
