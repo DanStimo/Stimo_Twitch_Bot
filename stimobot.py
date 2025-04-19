@@ -90,6 +90,7 @@ async def get_club_stats():
     return None
 
 async def get_recent_form(club_id):
+    global PLATFORM
     base_url = "https://proclubs.ea.com/api/fc/clubs/matches"
     headers = {"User-Agent": "Mozilla/5.0"}
     match_types = ["leagueMatch", "playoffMatch"]
