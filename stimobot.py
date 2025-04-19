@@ -5,7 +5,6 @@ from twitchio.ext import commands
 from rapidfuzz import process, fuzz
 import os
 import discord
-from dotenv import load_dotenv
 
 load_dotenv()
 
