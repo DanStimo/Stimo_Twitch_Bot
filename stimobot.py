@@ -9,6 +9,7 @@ BOT_NICK = os.getenv("BOT_NICK")
 TOKEN = os.getenv("TOKEN")
 CHANNEL = os.getenv("CHANNEL")
 CLUB_ID = os.getenv("CLUB_ID")
+PLATFORM = os.getenv("PLATFORM", "common-gen5")
 
 # Load or initialize club mapping
 try:
@@ -90,7 +91,6 @@ async def get_club_stats():
     return None
 
 async def get_recent_form(club_id):
-    global PLATFORM
     base_url = "https://proclubs.ea.com/api/fc/clubs/matches"
     headers = {"User-Agent": "Mozilla/5.0"}
     match_types = ["leagueMatch", "playoffMatch"]
