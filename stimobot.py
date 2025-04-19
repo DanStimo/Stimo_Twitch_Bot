@@ -6,8 +6,6 @@ from rapidfuzz import process, fuzz
 import os
 import discord
 
-load_dotenv()
-
 BOT_NICK = os.getenv("BOT_NICK")
 TOKEN = os.getenv("TOKEN")
 CHANNEL = os.getenv("CHANNEL")
