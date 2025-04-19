@@ -5,6 +5,9 @@ from twitchio.ext import commands
 from rapidfuzz import process, fuzz
 import os
 import discord
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BOT_NICK = os.getenv("BOT_NICK")
 TOKEN = os.getenv("TOKEN")
@@ -13,6 +16,9 @@ CLUB_ID = os.getenv("CLUB_ID")
 PLATFORM = os.getenv("PLATFORM", "common-gen5")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
+TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
+TWITCH_ACCESS_TOKEN = os.getenv("TWITCH_ACCESS_TOKEN")
+BROADCASTER_ID = os.getenv("BROADCASTER_ID")
 
 discord_client = discord.Client(intents=discord.Intents.default())
 
@@ -67,6 +73,26 @@ async def update_club_mapping_from_recent_matches(club_id, platform='common-gen5
                 print(f"Failed to fetch recent matches, status code: {response.status_code}")
     except Exception as e:
         print(f"Error fetching recent matches: {e}")    
+
+# Twitch VIP Check
+async def is_vip(username):
+    headers = {
+        "Client-ID": TWITCH_CLIENT_ID,
+        "Authorization": f"Bearer {TWITCH_ACCESS_TOKEN}"
+    }
+    url = f"https://api.twitch.tv/helix/channels/vips?broadcaster_id={BROADCASTER_ID}"
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                vips = response.json().get("data", [])
+                return any(vip["user_name"].lower() == username.lower() for vip in vips)
+            else:
+                print(f"[ERROR] VIP check failed: {response.status_code} - {response.text}")
+        except Exception as e:
+            print(f"[ERROR] Exception during VIP check: {e}")
+    return False
 
 async def get_club_stats():
     url = f"https://proclubs.ea.com/api/fc/clubs/overallStats?platform=common-gen5&clubIds=167054"
@@ -256,6 +282,10 @@ class Bot(commands.Bot):
 
     @commands.command(name='versus', aliases=['vs'])
     async def versus(self, ctx):
+        if not (ctx.author.is_mod or ctx.author.is_broadcaster or await is_vip(ctx.author.name)):
+        await ctx.send("🚫 You don't have permission to use this command.")
+        return
+        
         args = ctx.message.content.split(" ", 1)
         if len(args) != 2:
             await ctx.send("Usage: !versus <Club Name or Club ID>")
