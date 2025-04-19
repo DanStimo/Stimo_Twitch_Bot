@@ -134,6 +134,52 @@ async def get_recent_form(club_id):
         print(f"[ERROR] Failed to fetch recent form: {e}")
         return []
 
+async def get_last_match(club_id):
+    base_url = "https://proclubs.ea.com/api/fc/clubs/matches"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    match_types = ["leagueMatch", "playoffMatch"]
+    all_matches = []
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            for match_type in match_types:
+                url = f"{base_url}?matchType={match_type}&platform={PLATFORM}&clubIds={club_id}"
+                response = await client.get(url, headers=headers)
+                if response.status_code == 200:
+                    matches = response.json()
+                    all_matches.extend(matches)
+
+        all_matches.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+
+        if not all_matches:
+            return "Last match data not available."
+
+        match = all_matches[0]
+        clubs_data = match.get("clubs", {})
+        club_data = clubs_data.get(str(club_id))
+        opponent_id = next((cid for cid in clubs_data if cid != str(club_id)), None)
+        opponent_data = clubs_data.get(opponent_id) if opponent_id else None
+
+        if not club_data or not opponent_data:
+            return "Last match data not available."
+
+        # ✅ Safely pull opponent name from multiple possible sources
+        opponent_name = (
+            opponent_data.get("name")
+            or opponent_data.get("details", {}).get("name")
+            or match.get("opponentClub", {}).get("name", "Unknown")
+        )
+
+        our_score = int(club_data.get("goals", 0))
+        opponent_score = int(opponent_data.get("goals", 0))
+
+        result = "✅" if our_score > opponent_score else "❌" if our_score < opponent_score else "➖"
+        return f"{result} - {opponent_name} ({our_score}-{opponent_score})"
+
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch last match: {e}")
+        return "Last match data not available."
+
 class Bot(commands.Bot):
 
     def __init__(self):
@@ -156,8 +202,9 @@ class Bot(commands.Bot):
     async def record(self, ctx):
         stats = await get_club_stats()
         recent_form = await get_recent_form(CLUB_ID)
+        last_match = await get_last_match(CLUB_ID)
         form_string = ' '.join(recent_form) if recent_form else "No recent matches found."
-
+    
         if stats:
             await ctx.send(
                 f"Wingus FC Record - "
@@ -168,13 +215,12 @@ class Bot(commands.Bot):
                 f"❌ {stats['losses']} | "
                 f"🔥 Win Streak: {stats['winStreak']} {streak_emoji(stats['winStreak'])} | "
                 f"🛡️ Unbeaten Streak: {stats['unbeatenStreak']} {streak_emoji(stats['unbeatenStreak'])} | "
+                f"🕹️ Last Match: {last_match} | "
                 f"Recent Form: {form_string}"
+                
             )
         else:
             await ctx.send("Could not fetch club stats. EA's servers might be down or the data is unavailable.")
-
-
-    
 
     @commands.command(name='versus', aliases=['vs'])
     async def versus(self, ctx):
@@ -273,8 +319,9 @@ class Bot(commands.Bot):
                         skill_rating = opp_stats.get('skillRating', 'N/A')
 
                         recent_form = await get_recent_form(opponent_id)
+                        last_match = await get_last_match(opponent_id)
                         form_string = ' '.join(recent_form) if recent_form else "No recent matches found."
-
+                        
                         message = (
                             f"{club_name_formatted}'s Record | "
                             f"🏅 SR: {skill_rating} | "
@@ -284,8 +331,11 @@ class Bot(commands.Bot):
                             f"❌: {opp_stats.get('losses', 'N/A')} | "
                             f"🔥 Win Streak: {win_streak} {streak_emoji(win_streak)} | "
                             f"🛡️ Unbeaten Streak: {unbeaten_streak} {streak_emoji(unbeaten_streak)} | "
+                            f"🕹️ Last Match: {last_match} | "
                             f"Recent Form: {form_string}"
+                            
                         )
+
 
 
                         await ctx.send(message)
