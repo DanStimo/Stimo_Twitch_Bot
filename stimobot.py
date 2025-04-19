@@ -4,12 +4,17 @@ import json
 from twitchio.ext import commands
 from rapidfuzz import process, fuzz
 import os
+import discord
 
 BOT_NICK = os.getenv("BOT_NICK")
 TOKEN = os.getenv("TOKEN")
 CHANNEL = os.getenv("CHANNEL")
 CLUB_ID = os.getenv("CLUB_ID")
 PLATFORM = os.getenv("PLATFORM", "common-gen5")
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
+
+discord_client = discord.Client(intents=discord.Intents.default())
 
 # Load or initialize club mapping
 try:
@@ -204,6 +209,18 @@ class Bot(commands.Bot):
 
     async def event_ready(self):
         print(f"Logged in as | {self.nick}")
+    
+        # Start Discord client just long enough to send the message
+        async def announce_in_discord():
+            await discord_client.wait_until_ready()
+            channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
+            if channel:
+                await channel.send("✅ - omitS Bot (<:discord:1363127822209646612>) is now online and ready for commands!")
+            await discord_client.close()
+    
+        # Start Discord client in background
+        discord_client.loop.create_task(announce_in_discord())
+        await discord_client.start(DISCORD_TOKEN)
 
     async def event_message(self, message):
         if message.echo or message.author is None:
