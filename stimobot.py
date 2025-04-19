@@ -261,7 +261,7 @@ class Bot(commands.Bot):
     
         if stats:
             await ctx.send(
-                f"Wingus FC Record | "
+                f"xNever Enoughx Record | "
                 f"📈 Rank: {rank} | "
                 f"🏅 SR: {stats['skillRating']} | "
                 f"🎮: {stats['matchesPlayed']} | "
