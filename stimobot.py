@@ -209,13 +209,14 @@ class Bot(commands.Bot):
 
     async def event_ready(self):
         print(f"Logged in as | {self.nick}")
+        await update_club_mapping_from_recent_matches(167054)
     
         # Start Discord client just long enough to send the message
         async def announce_in_discord():
             await discord_client.wait_until_ready()
             channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
             if channel:
-                await channel.send("✅ - omitS Bot (<:discord:1363127822209646612>) is now online and ready for commands!")
+                await channel.send("✅ - omitS Bot (<:twitch:1361925662008541266>) is now online and ready for commands!")
             await discord_client.close()
     
         # Start Discord client in background
@@ -225,12 +226,7 @@ class Bot(commands.Bot):
     async def event_message(self, message):
         if message.echo or message.author is None:
             return
-        await self.handle_commands(message)
-
-    async def event_ready(self):
-        print(f"Logged in as | {self.nick}")
-        await update_club_mapping_from_recent_matches(167054)
-    
+        await self.handle_commands(message) 
 
     @commands.command(name='record')
     async def record(self, ctx):
