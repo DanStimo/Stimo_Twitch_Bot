@@ -337,7 +337,7 @@ class Bot(commands.Bot):
                         skill_rating = opp_stats.get('skillRating', 'N/A')
     
                         rank = await get_club_rank(opponent_id)
-                        rank_display = f"🏆 Rank: #{rank}" if rank else "🏆 Rank: Unranked"
+                        rank_display = f"📈 Rank: #{rank}" if rank else "📈 Rank: Unranked"
     
                         recent_form = await get_recent_form(opponent_id)
                         last_match = await get_last_match(opponent_id)
@@ -345,7 +345,7 @@ class Bot(commands.Bot):
     
                         message = (
                             f"{club_name_formatted}'s Record | "
-                            f"📈 Rank: #{rank_display} | "
+                            f"📈 {rank_display} | "
                             f"🏅 SR: {skill_rating} | "
                             f"🎮: {opp_stats.get('gamesPlayed', 'N/A')} | "
                             f"✅: {opp_stats.get('wins', 'N/A')} | "
