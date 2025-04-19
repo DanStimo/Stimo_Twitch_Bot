@@ -242,130 +242,130 @@ class Bot(commands.Bot):
 
 
     @commands.command(name='versus', aliases=['vs'])
-async def versus(self, ctx):
-    args = ctx.message.content.split(" ", 1)
-    if len(args) != 2:
-        await ctx.send("Usage: !versus <Club Name or Club ID>")
-        return
-
-    search_input = args[1].strip()
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-
-    async with httpx.AsyncClient(timeout=10) as client:
-        try:
-            normalized_input = normalize(search_input)
-            matched_club_id = None
-            for club_id, club_name in club_mapping.items():
-                if normalize(club_name) == normalized_input:
-                    matched_club_id = club_id
-                    break
-
-            if matched_club_id:
-                opponent_id = matched_club_id
-                club_name_formatted = club_mapping[opponent_id].upper()
-            elif search_input.isdigit():
-                opponent_id = search_input
-                club_name_formatted = club_mapping.get(opponent_id, f"CLUB ID {opponent_id}")
-            else:
-                club_name_encoded = search_input.replace(" ", "%20")
-                search_url = f"https://proclubs.ea.com/api/fc/allTimeLeaderboard/search?platform=common-gen5&clubName={club_name_encoded}"
-                search_response = await client.get(search_url, headers=headers)
-
-                if search_response.status_code != 200:
-                    await ctx.send("Club not found or EA search API failed.")
-                    return
-
-                search_data = search_response.json()
-                if not search_data or not isinstance(search_data, list):
-                    await ctx.send("No matching clubs found.")
-                    return
-
-                club_names = [club.get("clubInfo", {}).get("name", "") for club in search_data]
-                matches = process.extract(search_input, club_names, scorer=fuzz.token_set_ratio, limit=5)
-                good_matches = [match for match in matches if match[1] >= 5]
-
-                if not good_matches:
-                    await ctx.send(f"No clubs found that match '{search_input}'.")
-                    return
-
-                match_list = ', '.join([f"{name} ({round(score)}%)" for name, score, _ in good_matches])
-                await ctx.send(f"Did you mean: {match_list}?")
-
-                best_match_name = good_matches[0][0]
-                club = next((club for club in search_data if club.get("clubInfo", {}).get("name", "") == best_match_name), None)
-
-                if not club:
-                    await ctx.send("Could not retrieve club data.")
-                    return
-
-                opponent_id = str(club.get("clubInfo", {}).get("clubId"))
-                club_name_formatted = best_match_name.upper()
-
-            if opponent_id not in club_mapping:
-                match_url = f"https://proclubs.ea.com/api/fc/clubs/matches?matchType=leagueMatch&platform=common-gen5&clubIds={CLUB_ID}"
-                try:
-                    match_response = await client.get(match_url, headers=headers)
-                    if match_response.status_code == 200:
-                        matches = match_response.json()
-                        for match in matches:
-                            clubs_data = match.get("clubs", {})
-                            for cid, cdata in clubs_data.items():
-                                if cid != str(CLUB_ID) and cid == opponent_id:
-                                    name = cdata.get("details", {}).get("name")
-                                    if name:
-                                        club_mapping[opponent_id] = name
-                                        with open('club_mapping.json', 'w') as f:
-                                            json.dump(club_mapping, f, indent=4)
-                                        club_name_formatted = name.upper()
-                except Exception as e:
-                    print(f"[ERROR] Couldn't auto-update club_mapping from match history: {e}")
-
-            if opponent_id not in club_mapping:
-                club_mapping[opponent_id] = best_match_name
-                with open('club_mapping.json', 'w') as f:
-                    json.dump(club_mapping, f, indent=4)
-
-            stats_url = f"https://proclubs.ea.com/api/fc/clubs/overallStats?platform=common-gen5&clubIds={opponent_id}"
-            stats_response = await client.get(stats_url, headers=headers)
-
-            if stats_response.status_code == 200:
-                stats_data = stats_response.json()
-                if isinstance(stats_data, list) and len(stats_data) > 0:
-                    opp_stats = stats_data[0]
-                    win_streak = opp_stats.get('wstreak', '0')
-                    unbeaten_streak = opp_stats.get('unbeatenstreak', '0')
-                    skill_rating = opp_stats.get('skillRating', 'N/A')
-
-                    rank = await get_club_rank(opponent_id)
-                    rank_display = f"🏆 Rank: #{rank}" if rank else "🏆 Rank: Unranked"
-
-                    recent_form = await get_recent_form(opponent_id)
-                    last_match = await get_last_match(opponent_id)
-                    form_string = ' '.join(recent_form) if recent_form else "No recent matches found."
-
-                    message = (
-                        f"{club_name_formatted}'s Record | "
-                        f"📈 Rank: #{rank_display} | "
-                        f"🏅 SR: {skill_rating} | "
-                        f"🎮: {opp_stats.get('gamesPlayed', 'N/A')} | "
-                        f"✅: {opp_stats.get('wins', 'N/A')} | "
-                        f"➖: {opp_stats.get('ties', 'N/A')} | "
-                        f"❌: {opp_stats.get('losses', 'N/A')} | "
-                        f"🔥 Win Streak: {win_streak} {streak_emoji(win_streak)} | "
-                        f"🛡️ Unbeaten Streak: {unbeaten_streak} {streak_emoji(unbeaten_streak)} | "
-                        f"🕹️ Last Match: {last_match} | "
-                        f"Recent Form: {form_string}"
-                    )
-
-                    await ctx.send(message)
+    async def versus(self, ctx):
+        args = ctx.message.content.split(" ", 1)
+        if len(args) != 2:
+            await ctx.send("Usage: !versus <Club Name or Club ID>")
+            return
+    
+        search_input = args[1].strip()
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    
+        async with httpx.AsyncClient(timeout=10) as client:
+            try:
+                normalized_input = normalize(search_input)
+                matched_club_id = None
+                for club_id, club_name in club_mapping.items():
+                    if normalize(club_name) == normalized_input:
+                        matched_club_id = club_id
+                        break
+    
+                if matched_club_id:
+                    opponent_id = matched_club_id
+                    club_name_formatted = club_mapping[opponent_id].upper()
+                elif search_input.isdigit():
+                    opponent_id = search_input
+                    club_name_formatted = club_mapping.get(opponent_id, f"CLUB ID {opponent_id}")
                 else:
-                    await ctx.send("Opponent stats not found.")
-            else:
-                await ctx.send("Could not fetch opponent stats.")
-
-        except Exception as e:
-            print(f"Error in !versus command: {e}")
-            await ctx.send("An error occurred while fetching opponent stats.")
+                    club_name_encoded = search_input.replace(" ", "%20")
+                    search_url = f"https://proclubs.ea.com/api/fc/allTimeLeaderboard/search?platform=common-gen5&clubName={club_name_encoded}"
+                    search_response = await client.get(search_url, headers=headers)
+    
+                    if search_response.status_code != 200:
+                        await ctx.send("Club not found or EA search API failed.")
+                        return
+    
+                    search_data = search_response.json()
+                    if not search_data or not isinstance(search_data, list):
+                        await ctx.send("No matching clubs found.")
+                        return
+    
+                    club_names = [club.get("clubInfo", {}).get("name", "") for club in search_data]
+                    matches = process.extract(search_input, club_names, scorer=fuzz.token_set_ratio, limit=5)
+                    good_matches = [match for match in matches if match[1] >= 5]
+    
+                    if not good_matches:
+                        await ctx.send(f"No clubs found that match '{search_input}'.")
+                        return
+    
+                    match_list = ', '.join([f"{name} ({round(score)}%)" for name, score, _ in good_matches])
+                    await ctx.send(f"Did you mean: {match_list}?")
+    
+                    best_match_name = good_matches[0][0]
+                    club = next((club for club in search_data if club.get("clubInfo", {}).get("name", "") == best_match_name), None)
+    
+                    if not club:
+                        await ctx.send("Could not retrieve club data.")
+                        return
+    
+                    opponent_id = str(club.get("clubInfo", {}).get("clubId"))
+                    club_name_formatted = best_match_name.upper()
+    
+                if opponent_id not in club_mapping:
+                    match_url = f"https://proclubs.ea.com/api/fc/clubs/matches?matchType=leagueMatch&platform=common-gen5&clubIds={CLUB_ID}"
+                    try:
+                        match_response = await client.get(match_url, headers=headers)
+                        if match_response.status_code == 200:
+                            matches = match_response.json()
+                            for match in matches:
+                                clubs_data = match.get("clubs", {})
+                                for cid, cdata in clubs_data.items():
+                                    if cid != str(CLUB_ID) and cid == opponent_id:
+                                        name = cdata.get("details", {}).get("name")
+                                        if name:
+                                            club_mapping[opponent_id] = name
+                                            with open('club_mapping.json', 'w') as f:
+                                                json.dump(club_mapping, f, indent=4)
+                                            club_name_formatted = name.upper()
+                    except Exception as e:
+                        print(f"[ERROR] Couldn't auto-update club_mapping from match history: {e}")
+    
+                if opponent_id not in club_mapping:
+                    club_mapping[opponent_id] = best_match_name
+                    with open('club_mapping.json', 'w') as f:
+                        json.dump(club_mapping, f, indent=4)
+    
+                stats_url = f"https://proclubs.ea.com/api/fc/clubs/overallStats?platform=common-gen5&clubIds={opponent_id}"
+                stats_response = await client.get(stats_url, headers=headers)
+    
+                if stats_response.status_code == 200:
+                    stats_data = stats_response.json()
+                    if isinstance(stats_data, list) and len(stats_data) > 0:
+                        opp_stats = stats_data[0]
+                        win_streak = opp_stats.get('wstreak', '0')
+                        unbeaten_streak = opp_stats.get('unbeatenstreak', '0')
+                        skill_rating = opp_stats.get('skillRating', 'N/A')
+    
+                        rank = await get_club_rank(opponent_id)
+                        rank_display = f"🏆 Rank: #{rank}" if rank else "🏆 Rank: Unranked"
+    
+                        recent_form = await get_recent_form(opponent_id)
+                        last_match = await get_last_match(opponent_id)
+                        form_string = ' '.join(recent_form) if recent_form else "No recent matches found."
+    
+                        message = (
+                            f"{club_name_formatted}'s Record | "
+                            f"📈 Rank: #{rank_display} | "
+                            f"🏅 SR: {skill_rating} | "
+                            f"🎮: {opp_stats.get('gamesPlayed', 'N/A')} | "
+                            f"✅: {opp_stats.get('wins', 'N/A')} | "
+                            f"➖: {opp_stats.get('ties', 'N/A')} | "
+                            f"❌: {opp_stats.get('losses', 'N/A')} | "
+                            f"🔥 Win Streak: {win_streak} {streak_emoji(win_streak)} | "
+                            f"🛡️ Unbeaten Streak: {unbeaten_streak} {streak_emoji(unbeaten_streak)} | "
+                            f"🕹️ Last Match: {last_match} | "
+                            f"Recent Form: {form_string}"
+                        )
+    
+                        await ctx.send(message)
+                    else:
+                        await ctx.send("Opponent stats not found.")
+                else:
+                    await ctx.send("Could not fetch opponent stats.")
+    
+            except Exception as e:
+                print(f"Error in !versus command: {e}")
+                await ctx.send("An error occurred while fetching opponent stats.")
 
 
 if __name__ == "__main__":
