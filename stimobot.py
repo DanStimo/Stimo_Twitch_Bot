@@ -220,7 +220,7 @@ class Bot(commands.Bot):
             await discord_client.close()
     
         # Start Discord client in background
-        discord_client.loop.create_task(announce_in_discord())
+        asyncio.create_task(announce_in_discord())
         await discord_client.start(DISCORD_TOKEN)
 
     async def event_message(self, message):
