@@ -345,7 +345,7 @@ class Bot(commands.Bot):
     
                         message = (
                             f"{club_name_formatted}'s Record | "
-                            f"📈 {rank_display} | "
+                            f"{rank_display} | "
                             f"🏅 SR: {skill_rating} | "
                             f"🎮: {opp_stats.get('gamesPlayed', 'N/A')} | "
                             f"✅: {opp_stats.get('wins', 'N/A')} | "
