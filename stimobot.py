@@ -216,7 +216,7 @@ class Bot(commands.Bot):
             await discord_client.wait_until_ready()
             channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
             if channel:
-                await channel.send("✅ - omitS Bot (<:twitch:1361925662008541266>) is now online and ready for commands!")
+                await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
             await discord_client.close()
     
         # Start Discord client in background
