@@ -233,15 +233,25 @@ class Bot(commands.Bot):
     async def event_ready(self):
         print(f"Logged in as | {self.nick}")
         await update_club_mapping_from_recent_matches(167054)
-    
+
         # Start Discord client just long enough to send the message
         async def announce_in_discord():
             await discord_client.wait_until_ready()
             channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
             if channel:
-                await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
+                message = await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
+
+                async def delete_announcement():
+                    await asyncio.sleep(60)
+                    try:
+                        await message.delete()
+                    except Exception as e:
+                        print(f"[ERROR] Failed to delete Twitch bot announcement message: {e}")
+
+                asyncio.create_task(delete_announcement())
+
             await discord_client.close()
-    
+
         # Start Discord client in background
         asyncio.create_task(announce_in_discord())
         await discord_client.start(DISCORD_TOKEN)
@@ -249,7 +259,8 @@ class Bot(commands.Bot):
     async def event_message(self, message):
         if message.echo or message.author is None:
             return
-        await self.handle_commands(message) 
+        await self.handle_commands(message)
+ 
 
     @commands.command(name='record')
     async def record(self, ctx):
