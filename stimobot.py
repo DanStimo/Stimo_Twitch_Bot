@@ -240,16 +240,13 @@ class Bot(commands.Bot):
             channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
             if channel:
                 message = await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
-
-                async def delete_announcement():
+        
+                try:
                     await asyncio.sleep(60)
-                    try:
-                        await message.delete()
-                    except Exception as e:
-                        print(f"[ERROR] Failed to delete Twitch bot announcement message: {e}")
-
-                asyncio.create_task(delete_announcement())
-
+                    await message.delete()
+                except Exception as e:
+                    print(f"[ERROR] Failed to delete Twitch bot announcement message: {e}")
+        
             await discord_client.close()
 
         # Start Discord client in background
