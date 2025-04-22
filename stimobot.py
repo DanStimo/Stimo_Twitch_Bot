@@ -85,8 +85,6 @@ async def is_vip(username):
             if response.status_code == 200:
                 vips = response.json()
                 vip_list = vips.get("data", [])
-                
-                print(f"[DEBUG] VIP List: {vip_list}")   # Debug print
 
                 return any(vip["user_name"].lower() == username.lower() for vip in vip_list)
             else:
