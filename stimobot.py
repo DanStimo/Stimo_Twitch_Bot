@@ -83,8 +83,9 @@ async def is_vip(username):
         try:
             response = await client.get(url, headers=headers)
             if response.status_code == 200:
-                vips = response.json().get("data", [])
-                return any(vip["user_name"].lower() == username.lower() for vip in vips)
+                data = await response.json()   # Await this!
+                vips = data.get("data", [])
+                return any(vip["user_login"].lower() == username.lower() for vip in vips)
             else:
                 print(f"[ERROR] VIP check failed: {response.status_code} - {response.text}")
         except Exception as e:
