@@ -95,6 +95,21 @@ async def is_vip(username):
             print(f"[ERROR] Exception during VIP check: {e}")
     return False
 
+async def get_broadcaster_id():
+    headers = {
+        "Client-ID": TWITCH_CLIENT_ID,
+        "Authorization": f"Bearer {TWITCH_ACCESS_TOKEN}"
+    }
+    url = "https://api.twitch.tv/helix/users"
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers)
+        if response.status_code == 200:
+            user_data = response.json()
+            print(f"✅ Your Broadcaster ID: {user_data['data'][0]['id']}")
+        else:
+            print(f"[ERROR] Failed to fetch broadcaster ID: {response.status_code} - {response.text}")
+
 async def get_club_stats():
     url = f"https://proclubs.ea.com/api/fc/clubs/overallStats?platform=common-gen5&clubIds=167054"
     headers = {
