@@ -71,7 +71,33 @@ async def update_club_mapping_from_recent_matches(club_id, platform='common-gen5
     except Exception as e:
         print(f"Error fetching recent matches: {e}")    
 
-# Twitch VIP Check
+TWITCH_CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET")
+TWITCH_REFRESH_TOKEN = os.getenv("TWITCH_REFRESH_TOKEN")
+
+# Function to refresh the OAuth token
+async def refresh_oauth_token():
+    url = "https://id.twitch.tv/oauth2/token"
+    params = {
+        "grant_type": "refresh_token",
+        "refresh_token": TWITCH_REFRESH_TOKEN,
+        "client_id": TWITCH_CLIENT_ID,
+        "client_secret": TWITCH_CLIENT_SECRET,
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, data=params)
+        if response.status_code == 200:
+            tokens = response.json()
+            new_access_token = tokens["access_token"]
+            global TWITCH_ACCESS_TOKEN
+            TWITCH_ACCESS_TOKEN = new_access_token
+            print("[INFO] OAuth token refreshed successfully.")
+            return True
+        else:
+            print(f"[ERROR] Failed to refresh token: {response.status_code} - {response.text}")
+            return False
+
+# Updated VIP check with auto-refresh
 async def is_vip(username):
     headers = {
         "Client-ID": TWITCH_CLIENT_ID,
@@ -85,10 +111,22 @@ async def is_vip(username):
             if response.status_code == 200:
                 vips = response.json()
                 vip_list = vips.get("data", [])
-
                 return any(vip["user_name"].lower() == username.lower() for vip in vip_list)
-            else:
-                print(f"[ERROR] VIP check failed: {response.status_code} - {response.text}")
+
+            elif response.status_code == 401:
+                print("[WARN] Token expired. Attempting to refresh...")
+                if await refresh_oauth_token():
+                    # Retry VIP check after refresh
+                    headers["Authorization"] = f"Bearer {TWITCH_ACCESS_TOKEN}"
+                    retry_response = await client.get(url, headers=headers)
+                    if retry_response.status_code == 200:
+                        vips = retry_response.json()
+                        vip_list = vips.get("data", [])
+                        return any(vip["user_name"].lower() == username.lower() for vip in vip_list)
+                    else:
+                        print(f"[ERROR] Retry VIP check failed: {retry_response.status_code} - {retry_response.text}")
+                else:
+                    print("[ERROR] Could not refresh token.")
         except Exception as e:
             print(f"[ERROR] Exception during VIP check: {e}")
     return False
