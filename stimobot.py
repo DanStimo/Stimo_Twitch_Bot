@@ -5,7 +5,6 @@ from twitchio.ext import commands
 from rapidfuzz import process, fuzz
 import os
 import discord
-import aiohttp
 
 BOT_NICK = os.getenv("BOT_NICK")
 TOKEN = os.getenv("TOKEN")
@@ -17,23 +16,10 @@ DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
 TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
 TWITCH_ACCESS_TOKEN = os.getenv("TWITCH_ACCESS_TOKEN")
 BROADCASTER_ID = os.getenv("BROADCASTER_ID")
-SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
-SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-SPOTIFY_REFRESH_TOKEN = os.getenv("SPOTIFY_REFRESH_TOKEN")
-
-SPOTIFY_TOKEN = None
 
 discord_client = discord.Client(intents=discord.Intents.default())
 
-# Load or initialize club mappingclass Bot(commands.Bot):
-def __init__(self):
-    super().__init__(...)
-
-    async def event_ready(self):  # ✅ outside __init__
-        print("✅ StimoBot is online and ready.")
-        await update_club_mapping_from_recent_matches(167054)
-        asyncio.create_task(self.announce_in_discord())
-        asyncio.create_task(self.spotify_watcher())
+# Load or initialize club mapping
 try:
     with open('club_mapping.json', 'r') as f:
         club_mapping = json.load(f)
@@ -110,51 +96,6 @@ async def refresh_oauth_token():
         else:
             print(f"[ERROR] Failed to refresh token: {response.status_code} - {response.text}")
             return False
-
-    async def refresh_spotify_token():
-        url = "https://accounts.spotify.com/api/token"
-        data = {
-            "grant_type": "refresh_token",
-            "refresh_token": SPOTIFY_REFRESH_TOKEN,
-            "client_id": SPOTIFY_CLIENT_ID,
-            "client_secret": SPOTIFY_CLIENT_SECRET
-        }
-    
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, data=data)
-            if resp.status_code == 200:
-                tokens = resp.json()
-                global SPOTIFY_TOKEN
-                SPOTIFY_TOKEN = tokens["access_token"]
-            else:
-                print(f"[ERROR] Failed to refresh Spotify token: {resp.text}")
-
-async def get_current_spotify_song():
-    global SPOTIFY_REFRESH_TOKEN
-
-    if not SPOTIFY_REFRESH_TOKEN:
-        print("[ERROR] No Spotify access token available.")
-        return None
-
-    headers = {
-        "Authorization": f"Bearer {SPOTIFY_REFRESH_TOKEN}"
-    }
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get("https://api.spotify.com/v1/me/player/currently-playing", headers=headers) as resp:
-            if resp.status == 204:
-                return None  # No track playing
-            if resp.status != 200:
-                print(f"[ERROR] Failed to get current song: {resp.status}")
-                return None
-            data = await resp.json()
-            item = data.get("item")
-            if item:
-                song = item.get("name")
-                artist = item["artists"][0]["name"]
-                return f"{song} by {artist}"
-            return None
-
 
 # Updated VIP check with auto-refresh
 async def is_vip(username):
@@ -340,63 +281,29 @@ async def get_club_rank(club_id):
 
 
 class Bot(commands.Bot):
+
     def __init__(self):
-        super().__init__(
-            token=TOKEN,
-            prefix='!',
-            initial_channels=[CHANNEL],
-            client_id=TWITCH_CLIENT_ID,
-            client_secret=TWITCH_CLIENT_SECRET,
-            bot_id=BROADCASTER_ID
-        )
+        super().__init__(token=TOKEN, prefix='!', initial_channels=[CHANNEL])
 
     async def event_ready(self):
-        print("✅ StimoBot is online and ready.")
+        print(f"Logged in as | {self.nick}")
         await update_club_mapping_from_recent_matches(167054)
-        asyncio.create_task(self.announce_in_discord())
-        asyncio.create_task(self.spotify_watcher())
 
-    async def announce_in_discord(self):
-        await discord_client.wait_until_ready()
-        channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
-        if channel:
-            message = await channel.send("✅ - StimoBot is now online and ready for commands!")
-            try:
-                await asyncio.sleep(60)
-                await message.delete()
-            except Exception as e:
-                print(f"[ERROR] Failed to delete Discord message: {e}")
-        await discord_client.close()
-
-    async def spotify_watcher(self):
-        last_song = None
-        while True:
-            try:
-                current_song = await get_current_spotify_song()
-                if current_song and current_song != last_song:
-                    last_song = current_song
-                    chan = self.get_channel(CHANNEL)
-                    if chan:
-                        await chan.send(f"🎵 Now playing: {current_song}")
-            except Exception as e:
-                print(f"[ERROR] Spotify watcher failed: {e}")
-            await asyncio.sleep(15) # Poll every 15 seconds
-        
         # Start Discord client just long enough to send the message
-    async def announce_in_discord(self):
-        await discord_client.wait_until_ready()
-        channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
-        if channel:
-            message = await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
+        async def announce_in_discord():
+            await discord_client.wait_until_ready()
+            channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
+            if channel:
+                message = await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
+        
+                try:
+                    await asyncio.sleep(60)
+                    await message.delete()
+                except Exception as e:
+                    print(f"[ERROR] Failed to delete Twitch bot announcement message: {e}")
+        
+            await discord_client.close()
 
-            try:
-                await asyncio.sleep(60)
-                await message.delete()
-            except Exception as e:
-                print(f"[ERROR] Failed to delete Twitch bot announcement message: {e}")
-
-        await discord_client.close()
-    
         # Start Discord client in background
         asyncio.create_task(announce_in_discord())
         await discord_client.start(DISCORD_TOKEN)
@@ -563,16 +470,7 @@ class Bot(commands.Bot):
                 print(f"Error in !versus command: {e}")
                 await ctx.send("An error occurred while fetching opponent stats.")
 
-async def main():
-    # Start Discord client in the background
-    discord_task = asyncio.create_task(discord_client.start(DISCORD_TOKEN))
 
-    # Start Twitch bot
-    bot = Bot()
-    twitch_task = asyncio.create_task(bot.start())
-
-    # Wait for both
-    await asyncio.gather(discord_task, twitch_task)
 
 if __name__ == "__main__":
     bot = Bot()
