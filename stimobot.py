@@ -29,7 +29,7 @@ def __init__(self):
     super().__init__(...)
 
     async def event_ready(self):  # ✅ outside __init__
-        print(f"Logged in as | {self.nick}")
+        print("✅ StimoBot is online and ready.")
         await update_club_mapping_from_recent_matches(167054)
         asyncio.create_task(self.announce_in_discord())
         asyncio.create_task(self.spotify_watcher())
@@ -344,7 +344,7 @@ class Bot(commands.Bot):
         )
 
     async def event_ready(self):
-        print(f"Logged in as | {self.nick}")
+        print("✅ StimoBot is online and ready.")
         await update_club_mapping_from_recent_matches(167054)
         asyncio.create_task(self.announce_in_discord())
         asyncio.create_task(self.spotify_watcher())
