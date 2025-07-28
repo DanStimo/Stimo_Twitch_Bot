@@ -16,6 +16,11 @@ DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
 TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
 TWITCH_ACCESS_TOKEN = os.getenv("TWITCH_ACCESS_TOKEN")
 BROADCASTER_ID = os.getenv("BROADCASTER_ID")
+SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+SPOTIFY_REFRESH_TOKEN = os.getenv("SPOTIFY_REFRESH_TOKEN")
+
+SPOTIFY_TOKEN = None
 
 discord_client = discord.Client(intents=discord.Intents.default())
 
@@ -96,6 +101,24 @@ async def refresh_oauth_token():
         else:
             print(f"[ERROR] Failed to refresh token: {response.status_code} - {response.text}")
             return False
+
+    async def refresh_spotify_token():
+        url = "https://accounts.spotify.com/api/token"
+        data = {
+            "grant_type": "refresh_token",
+            "refresh_token": SPOTIFY_REFRESH_TOKEN,
+            "client_id": SPOTIFY_CLIENT_ID,
+            "client_secret": SPOTIFY_CLIENT_SECRET
+        }
+    
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, data=data)
+            if resp.status_code == 200:
+                tokens = resp.json()
+                global SPOTIFY_TOKEN
+                SPOTIFY_TOKEN = tokens["access_token"]
+            else:
+                print(f"[ERROR] Failed to refresh Spotify token: {resp.text}")
 
 # Updated VIP check with auto-refresh
 async def is_vip(username):
@@ -283,7 +306,14 @@ async def get_club_rank(club_id):
 class Bot(commands.Bot):
 
     def __init__(self):
-        super().__init__(token=TOKEN, prefix='!', initial_channels=[CHANNEL])
+        super().__init__(
+            token=TOKEN,
+            prefix='!',
+            initial_channels=[CHANNEL],
+            client_id=TWITCH_CLIENT_ID,
+            client_secret=TWITCH_CLIENT_SECRET,
+            bot_id=BROADCASTER_ID
+        )
 
     async def event_ready(self):
         print(f"Logged in as | {self.nick}")
