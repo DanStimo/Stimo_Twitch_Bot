@@ -343,45 +343,45 @@ class Bot(commands.Bot):
             bot_id=BROADCASTER_ID
         )
 
-        async def event_ready(self):
-            print(f"Logged in as | {self.nick}")
-            await update_club_mapping_from_recent_matches(167054)
-            asyncio.create_task(self.announce_in_discord())
-            asyncio.create_task(self.spotify_watcher())
-            await discord_client.start(DISCORD_TOKEN)
+    async def event_ready(self):
+        print(f"Logged in as | {self.nick}")
+        await update_club_mapping_from_recent_matches(167054)
+        asyncio.create_task(self.announce_in_discord())
+        asyncio.create_task(self.spotify_watcher())
+        await discord_client.start(DISCORD_TOKEN)
 
-        async def spotify_watcher(self):
-            last_song = None
-            while True:
-                try:
-                    current_song = await get_current_spotify_song()
-                    if current_song and current_song != last_song:
-                        last_song = current_song
-                        chan = self.get_channel(CHANNEL)
-                        if chan:
-                            await chan.send(f"🎵 Now playing: {current_song}")
-                except Exception as e:
-                    print(f"[ERROR] Spotify watcher failed: {e}")
-                await asyncio.sleep(15)  # Poll every 15 seconds
+    async def spotify_watcher(self):
+        last_song = None
+        while True:
+            try:
+                current_song = await get_current_spotify_song()
+                if current_song and current_song != last_song:
+                    last_song = current_song
+                    chan = self.get_channel(CHANNEL)
+                    if chan:
+                        await chan.send(f"🎵 Now playing: {current_song}")
+            except Exception as e:
+                print(f"[ERROR] Spotify watcher failed: {e}")
+            await asyncio.sleep(15)  # Poll every 15 seconds
         
         # Start Discord client just long enough to send the message
-        async def announce_in_discord():
-            await discord_client.wait_until_ready()
-            channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
-            if channel:
-                message = await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
+    async def announce_in_discord():
+        await discord_client.wait_until_ready()
+        channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
+        if channel:
+            message = await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
+
+            try:
+                await asyncio.sleep(60)
+                await message.delete()
+            except Exception as e:
+                print(f"[ERROR] Failed to delete Twitch bot announcement message: {e}")
+
+        await discord_client.close()
     
-                try:
-                    await asyncio.sleep(60)
-                    await message.delete()
-                except Exception as e:
-                    print(f"[ERROR] Failed to delete Twitch bot announcement message: {e}")
-    
-            await discord_client.close()
-        
-            # Start Discord client in background
-            asyncio.create_task(announce_in_discord())
-            await discord_client.start(DISCORD_TOKEN)
+        # Start Discord client in background
+        asyncio.create_task(announce_in_discord())
+        await discord_client.start(DISCORD_TOKEN)
 
     async def event_message(self, message):
         if message.echo or message.author is None:
