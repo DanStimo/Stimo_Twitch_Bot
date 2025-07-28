@@ -25,8 +25,8 @@ SPOTIFY_TOKEN = None
 discord_client = discord.Client(intents=discord.Intents.default())
 
 # Load or initialize club mappingclass Bot(commands.Bot):
-    def __init__(self):
-        super().__init__(...)
+def __init__(self):
+    super().__init__(...)
 
     async def event_ready(self):  # ✅ outside __init__
         print(f"Logged in as | {self.nick}")
