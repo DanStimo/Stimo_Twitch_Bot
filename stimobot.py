@@ -348,7 +348,18 @@ class Bot(commands.Bot):
         await update_club_mapping_from_recent_matches(167054)
         asyncio.create_task(self.announce_in_discord())
         asyncio.create_task(self.spotify_watcher())
-        await discord_client.start(DISCORD_TOKEN)
+
+    async def announce_in_discord(self):
+        await discord_client.wait_until_ready()
+        channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
+        if channel:
+            message = await channel.send("✅ - StimoBot is now online and ready for commands!")
+            try:
+                await asyncio.sleep(60)
+                await message.delete()
+            except Exception as e:
+                print(f"[ERROR] Failed to delete Discord message: {e}")
+        await discord_client.close()
 
     async def spotify_watcher(self):
         last_song = None
@@ -362,7 +373,7 @@ class Bot(commands.Bot):
                         await chan.send(f"🎵 Now playing: {current_song}")
             except Exception as e:
                 print(f"[ERROR] Spotify watcher failed: {e}")
-            await asyncio.sleep(15)  # Poll every 15 seconds
+            await asyncio.sleep(15) # Poll every 15 seconds
         
         # Start Discord client just long enough to send the message
     async def announce_in_discord():
