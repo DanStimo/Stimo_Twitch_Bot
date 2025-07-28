@@ -120,6 +120,27 @@ async def refresh_oauth_token():
             else:
                 print(f"[ERROR] Failed to refresh Spotify token: {resp.text}")
 
+async def get_current_spotify_song():
+    if SPOTIFY_TOKEN is None:
+        await refresh_spotify_token()
+
+    headers = {"Authorization": f"Bearer {SPOTIFY_TOKEN}"}
+    url = "https://api.spotify.com/v1/me/player/currently-playing"
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, headers=headers)
+        if resp.status_code == 204:
+            return None  # No song currently playing
+        if resp.status_code == 401:
+            await refresh_spotify_token()
+            return await get_current_spotify_song()
+        if resp.status_code == 200:
+            data = resp.json()
+            if data and data.get("is_playing"):
+                item = data["item"]
+                return f"{item['artists'][0]['name']} - {item['name']}"
+    return None
+
 # Updated VIP check with auto-refresh
 async def is_vip(username):
     headers = {
@@ -316,9 +337,25 @@ class Bot(commands.Bot):
         )
 
         async def event_ready(self):
-            print(f"✅ Bot is connected to Twitch.")
-        
+            print(f"Logged in as | {self.nick}")
             await update_club_mapping_from_recent_matches(167054)
+            asyncio.create_task(self.announce_in_discord())
+            asyncio.create_task(self.spotify_watcher())
+            await discord_client.start(DISCORD_TOKEN)
+
+        async def spotify_watcher(self):
+            last_song = None
+            while True:
+                try:
+                    current_song = await get_current_spotify_song()
+                    if current_song and current_song != last_song:
+                        last_song = current_song
+                        chan = self.get_channel(CHANNEL)
+                        if chan:
+                            await chan.send(f"🎵 Now playing: {current_song}")
+                except Exception as e:
+                    print(f"[ERROR] Spotify watcher failed: {e}")
+                await asyncio.sleep(15)  # Poll every 15 seconds
         
             # Start Discord client just long enough to send the message
             async def announce_in_discord():
