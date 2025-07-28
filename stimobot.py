@@ -24,7 +24,15 @@ SPOTIFY_TOKEN = None
 
 discord_client = discord.Client(intents=discord.Intents.default())
 
-# Load or initialize club mapping
+# Load or initialize club mappingclass Bot(commands.Bot):
+    def __init__(self):
+        super().__init__(...)
+
+    async def event_ready(self):  # ✅ outside __init__
+        print(f"Logged in as | {self.nick}")
+        await update_club_mapping_from_recent_matches(167054)
+        asyncio.create_task(self.announce_in_discord())
+        asyncio.create_task(self.spotify_watcher())
 try:
     with open('club_mapping.json', 'r') as f:
         club_mapping = json.load(f)
@@ -325,7 +333,6 @@ async def get_club_rank(club_id):
 
 
 class Bot(commands.Bot):
-
     def __init__(self):
         super().__init__(
             token=TOKEN,
@@ -357,20 +364,20 @@ class Bot(commands.Bot):
                     print(f"[ERROR] Spotify watcher failed: {e}")
                 await asyncio.sleep(15)  # Poll every 15 seconds
         
-            # Start Discord client just long enough to send the message
-            async def announce_in_discord():
-                await discord_client.wait_until_ready()
-                channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
-                if channel:
-                    message = await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
-        
-                    try:
-                        await asyncio.sleep(60)
-                        await message.delete()
-                    except Exception as e:
-                        print(f"[ERROR] Failed to delete Twitch bot announcement message: {e}")
-        
-                await discord_client.close()
+        # Start Discord client just long enough to send the message
+        async def announce_in_discord():
+            await discord_client.wait_until_ready()
+            channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
+            if channel:
+                message = await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
+    
+                try:
+                    await asyncio.sleep(60)
+                    await message.delete()
+                except Exception as e:
+                    print(f"[ERROR] Failed to delete Twitch bot announcement message: {e}")
+    
+            await discord_client.close()
         
             # Start Discord client in background
             asyncio.create_task(announce_in_discord())
