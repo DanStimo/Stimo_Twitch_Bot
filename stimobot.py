@@ -5,6 +5,7 @@ from twitchio.ext import commands
 from rapidfuzz import process, fuzz
 import os
 import discord
+import aiohttp
 
 BOT_NICK = os.getenv("BOT_NICK")
 TOKEN = os.getenv("TOKEN")
@@ -129,25 +130,31 @@ async def refresh_oauth_token():
                 print(f"[ERROR] Failed to refresh Spotify token: {resp.text}")
 
 async def get_current_spotify_song():
-    if SPOTIFY_TOKEN is None:
-        await refresh_spotify_token()
+    global SPOTIFY_REFRESH_TOKEN
 
-    headers = {"Authorization": f"Bearer {SPOTIFY_TOKEN}"}
-    url = "https://api.spotify.com/v1/me/player/currently-playing"
+    if not SPOTIFY_REFRESH_TOKEN:
+        print("[ERROR] No Spotify access token available.")
+        return None
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(url, headers=headers)
-        if resp.status_code == 204:
-            return None  # No song currently playing
-        if resp.status_code == 401:
-            await refresh_spotify_token()
-            return await get_current_spotify_song()
-        if resp.status_code == 200:
-            data = resp.json()
-            if data and data.get("is_playing"):
-                item = data["item"]
-                return f"{item['artists'][0]['name']} - {item['name']}"
-    return None
+    headers = {
+        "Authorization": f"Bearer {SPOTIFY_REFRESH_TOKEN}"
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get("https://api.spotify.com/v1/me/player/currently-playing", headers=headers) as resp:
+            if resp.status == 204:
+                return None  # No track playing
+            if resp.status != 200:
+                print(f"[ERROR] Failed to get current song: {resp.status}")
+                return None
+            data = await resp.json()
+            item = data.get("item")
+            if item:
+                song = item.get("name")
+                artist = item["artists"][0]["name"]
+                return f"{song} by {artist}"
+            return None
+
 
 # Updated VIP check with auto-refresh
 async def is_vip(username):
@@ -556,7 +563,16 @@ class Bot(commands.Bot):
                 print(f"Error in !versus command: {e}")
                 await ctx.send("An error occurred while fetching opponent stats.")
 
+async def main():
+    # Start Discord client in the background
+    discord_task = asyncio.create_task(discord_client.start(DISCORD_TOKEN))
 
+    # Start Twitch bot
+    bot = Bot()
+    twitch_task = asyncio.create_task(bot.start())
+
+    # Wait for both
+    await asyncio.gather(discord_task, twitch_task)
 
 if __name__ == "__main__":
     bot = Bot()
