@@ -316,7 +316,9 @@ class Bot(commands.Bot):
         )
 
     async def event_ready(self):
-        print(f"Logged in as | {self._connection._user.name}")
+        me = await self.get_me()
+        print(f"Logged in as | {me.display_name}")
+        
         await update_club_mapping_from_recent_matches(167054)
 
         # Start Discord client just long enough to send the message
