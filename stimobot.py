@@ -315,10 +315,9 @@ class Bot(commands.Bot):
             bot_id=BROADCASTER_ID
         )
 
-    async def event_ready(self):
-        me = await self.get_me()
-        print(f"Logged in as | {me.display_name}")
-        
+        async def event_ready(self):
+            print(f"✅ Bot is connected to Twitch.")
+
         await update_club_mapping_from_recent_matches(167054)
 
         # Start Discord client just long enough to send the message
