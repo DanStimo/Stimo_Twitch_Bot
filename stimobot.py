@@ -376,7 +376,7 @@ class Bot(commands.Bot):
             await asyncio.sleep(15) # Poll every 15 seconds
         
         # Start Discord client just long enough to send the message
-    async def announce_in_discord():
+    async def announce_in_discord(self):
         await discord_client.wait_until_ready()
         channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
         if channel:
