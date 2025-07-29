@@ -305,6 +305,21 @@ async def get_club_rank(club_id):
         print(f"[ERROR] Failed to fetch leaderboard rank: {e}")
         return None
 
+# Start Discord client just long enough to send the message
+    async def announce_in_discord():
+        await discord_client.wait_until_ready()
+        channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
+        if channel:
+            message = await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
+            try:
+                await asyncio.sleep(60)
+                await message.delete()
+            except Exception as e:
+                print(f"[ERROR] Failed to delete Twitch bot announcement message: {e}")
+        await discord_client.close()
+
+    asyncio.create_task(announce_in_discord())
+        await discord_client.start(DISCORD_TOKEN)
 
 class Bot(commands.Bot):
 
@@ -324,22 +339,6 @@ class Bot(commands.Bot):
         await update_club_mapping_from_recent_matches(167054)
     
         asyncio.create_task(announce_in_discord())
-
-        # Start Discord client just long enough to send the message
-        async def announce_in_discord():
-            await discord_client.wait_until_ready()
-            channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
-            if channel:
-                message = await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
-                try:
-                    await asyncio.sleep(60)
-                    await message.delete()
-                except Exception as e:
-                    print(f"[ERROR] Failed to delete Twitch bot announcement message: {e}")
-            await discord_client.close()
-    
-        asyncio.create_task(announce_in_discord())
-        await discord_client.start(DISCORD_TOKEN)
 
     async def event_message(self, message):
         if message.echo or message.author is None:
