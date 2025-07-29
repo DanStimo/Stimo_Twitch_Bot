@@ -345,9 +345,13 @@ class Bot(commands.Bot):
         await refresh_oauth_token()
         username = await get_bot_username()
         print(f"✅ Twitch bot is ready. Logged in as: {username}")
-        await self.join_channels([CHANNEL])  # <-- Force join
+    
+        # Force join the channel explicitly
+        await self._ws.join_channel(f"#{CHANNEL.lower()}")
+    
         await update_club_mapping_from_recent_matches(167054)
         asyncio.create_task(announce_in_discord())
+
 
     async def event_message(self, message):
         print(f"[DEBUG] Message received: {message.content} from {message.author.name}")
