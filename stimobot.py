@@ -332,12 +332,12 @@ class Bot(commands.Bot):
         super().__init__(
             token=TOKEN,
             prefix="!",
-            initial_channels=[f"#{CHANNEL.lower()}"],
+            initial_channels=[CHANNEL.lower()],
             client_id=CLIENT_ID,
             client_secret=TWITCH_CLIENT_SECRET,
             bot_id=BOT_ID
         )
-    
+
     async def event_raw_data(self, data):
         print(f"[RAW IRC] {data}")
 
