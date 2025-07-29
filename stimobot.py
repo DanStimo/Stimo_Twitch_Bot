@@ -349,6 +349,7 @@ class Bot(commands.Bot):
         await refresh_oauth_token()
         username = await get_bot_username()
         print(f"✅ Twitch bot is ready. Logged in as: {username}")
+        await self.join_channels([CHANNEL])  # ✅ Required in TwitchIO v3+
         await update_club_mapping_from_recent_matches(167054)
 
     async def event_message(self, message):
