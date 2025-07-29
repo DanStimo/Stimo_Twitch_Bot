@@ -346,10 +346,11 @@ class Bot(commands.Bot):
         asyncio.create_task(announce_in_discord())
 
     async def event_message(self, message):
+        print(f"[DEBUG] Message received: {message.content} from {message.author.name}")
+    
         if message.echo or message.author is None:
             return
         await self.handle_commands(message)
- 
 
     @commands.command(name='record')
     async def record(self, ctx):
