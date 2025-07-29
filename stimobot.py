@@ -283,7 +283,14 @@ async def get_club_rank(club_id):
 class Bot(commands.Bot):
 
     def __init__(self):
-        super().__init__(token=TOKEN, prefix='!', initial_channels=[CHANNEL])
+        super().__init__(
+            token=TOKEN,
+            prefix='!',
+            initial_channels=[CHANNEL],
+            client_id=CLIENT_ID,
+            client_secret=TWITCH_CLIENT_SECRET,
+            bot_id=BOT_ID
+        )
 
     async def event_ready(self):
         print(f"Logged in as | {self.nick}")
