@@ -40,7 +40,7 @@ async def get_bot_username():
 
     async with httpx.AsyncClient() as client:
         resp = await client.get(url, headers=headers)
-        print(f"[DEBUG] Twitch /users response: {resp.status_code} {resp.text}")
+        # print(f"[DEBUG] Twitch /users response: {resp.status_code} {resp.text}")
         if resp.status_code == 200:
             data = resp.json()
             return data["data"][0]["display_name"]
