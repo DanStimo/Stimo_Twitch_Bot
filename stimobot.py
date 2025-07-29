@@ -20,7 +20,7 @@ class Bot(commands.Bot):
         )
 
     async def event_ready(self):
-        print(f"✅ Bot is online as: {self.nick}")
+        print(f"✅ Bot is online as: {self._connection.user.name}")
 
     async def event_message(self, message):
         print(f"[DEBUG] Message from {message.author.name}: {message.content}")
