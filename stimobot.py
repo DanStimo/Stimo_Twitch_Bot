@@ -326,6 +326,9 @@ async def announce_in_discord():
     except Exception as e:
         print(f"[ERROR] Could not start Discord client: {e}")
 
+import twitchio
+print("[DEBUG] TwitchIO version:", twitchio.__version__)
+
 class Bot(commands.Bot):
 
     def __init__(self):
