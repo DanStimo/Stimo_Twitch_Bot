@@ -332,10 +332,7 @@ class Bot(commands.Bot):
         super().__init__(
             token=TOKEN,
             prefix="!",
-            initial_channels=[CHANNEL.lower()],
-            client_id=CLIENT_ID,
-            client_secret=TWITCH_CLIENT_SECRET,
-            bot_id=BOT_ID
+            initial_channels=[CHANNEL.lower()]
         )
 
     async def event_raw_data(self, data):
@@ -346,7 +343,6 @@ class Bot(commands.Bot):
         username = await get_bot_username()
         print(f"✅ Twitch bot is ready. Logged in as: {username}")
         await update_club_mapping_from_recent_matches(167054)
-        asyncio.create_task(announce_in_discord())
 
     async def event_message(self, message):
         print(f"[DEBUG] Message received: {message.content} from {message.author.name}")
