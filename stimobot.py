@@ -342,9 +342,10 @@ class Bot(commands.Bot):
         print(f"[RAW IRC] {data}")
 
     async def event_ready(self):
-        await refresh_oauth_token()  # Refresh the token
+        await refresh_oauth_token()
         username = await get_bot_username()
         print(f"✅ Twitch bot is ready. Logged in as: {username}")
+        await self.join_channels([CHANNEL])  # <-- Force join
         await update_club_mapping_from_recent_matches(167054)
         asyncio.create_task(announce_in_discord())
 
