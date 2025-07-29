@@ -31,6 +31,20 @@ async def on_ready():
         except Exception as e:
             print(f"[ERROR] Failed to announce/delete in Discord: {e}")
 
+async def get_bot_username():
+    headers = {
+        "Client-ID": CLIENT_ID,
+        "Authorization": f"Bearer {TWITCH_ACCESS_TOKEN}"
+    }
+    url = "https://api.twitch.tv/helix/users"
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, headers=headers)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data["data"][0]["display_name"]
+        return "Unknown"
+
 # Load or initialize club mapping
 try:
     with open('club_mapping.json', 'r') as f:
@@ -305,9 +319,12 @@ class Bot(commands.Bot):
         )
 
     async def event_ready(self):
-        print(f"Logged in as | {self.nick}")
+        username = await get_bot_username()
+        print(f"✅ Twitch bot is ready. Logged in as: {username}")
         await update_club_mapping_from_recent_matches(167054)
     
+        asyncio.create_task(announce_in_discord())
+
         # Start Discord client just long enough to send the message
         async def announce_in_discord():
             await discord_client.wait_until_ready()
