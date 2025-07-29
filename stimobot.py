@@ -108,7 +108,7 @@ async def refresh_oauth_token():
         "grant_type": "refresh_token",
         "refresh_token": TWITCH_REFRESH_TOKEN,
         "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
+        "client_secret": TWITCH_CLIENT_SECRET,
     }
 
     async with httpx.AsyncClient() as client:
