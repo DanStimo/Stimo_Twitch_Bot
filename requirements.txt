@@ -1,4 +1,4 @@
-twitchio
+twitchio>=2.9.0
 httpx
 rapidfuzz
 discord.py
