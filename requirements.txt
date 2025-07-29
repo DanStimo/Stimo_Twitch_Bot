@@ -2,3 +2,4 @@ twitchio
 httpx
 rapidfuzz
 discord.py
+twitchio[starlette]
