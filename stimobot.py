@@ -19,6 +19,18 @@ BROADCASTER_ID = os.getenv("BROADCASTER_ID")
 
 discord_client = discord.Client(intents=discord.Intents.default())
 
+@discord_client.event
+async def on_ready():
+    print(f"✅ Discord bot ready as {discord_client.user}")
+    channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
+    if channel:
+        try:
+            message = await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
+            await asyncio.sleep(60)
+            await message.delete()
+        except Exception as e:
+            print(f"[ERROR] Failed to announce/delete in Discord: {e}")
+
 # Load or initialize club mapping
 try:
     with open('club_mapping.json', 'r') as f:
@@ -293,8 +305,6 @@ class Bot(commands.Bot):
         )
 
     async def event_ready(self):
-        await super().event_ready()  # Ensures TwitchIO sets up `self.nick` and others properly
-    
         print(f"Logged in as | {self.nick}")
         await update_club_mapping_from_recent_matches(167054)
     
