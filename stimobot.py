@@ -351,7 +351,10 @@ class Bot(commands.Bot):
         if message.echo or message.author is None:
             return
         await self.handle_commands(message)
-
+        
+    @commands.command(name='ping')
+    async def ping(self, ctx):
+        await ctx.send("pong!")
 
     @commands.command(name='record')
     async def record(self, ctx):
