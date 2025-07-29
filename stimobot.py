@@ -6,14 +6,14 @@ from rapidfuzz import process, fuzz
 import os
 import discord
 
-BOT_NICK = os.getenv("BOT_NICK")
+BOT_ID = os.getenv("BOT_ID")
 TOKEN = os.getenv("TOKEN")
 CHANNEL = os.getenv("CHANNEL")
 CLUB_ID = os.getenv("CLUB_ID")
 PLATFORM = os.getenv("PLATFORM", "common-gen5")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
-TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
+CLIENT_ID = os.getenv("CLIENT_ID")
 TWITCH_ACCESS_TOKEN = os.getenv("TWITCH_ACCESS_TOKEN")
 BROADCASTER_ID = os.getenv("BROADCASTER_ID")
 
@@ -80,8 +80,8 @@ async def refresh_oauth_token():
     params = {
         "grant_type": "refresh_token",
         "refresh_token": TWITCH_REFRESH_TOKEN,
-        "client_id": TWITCH_CLIENT_ID,
-        "client_secret": TWITCH_CLIENT_SECRET,
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
     }
 
     async with httpx.AsyncClient() as client:
@@ -100,7 +100,7 @@ async def refresh_oauth_token():
 # Updated VIP check with auto-refresh
 async def is_vip(username):
     headers = {
-        "Client-ID": TWITCH_CLIENT_ID,
+        "Client-ID": CLIENT_ID,
         "Authorization": f"Bearer {TWITCH_ACCESS_TOKEN}"
     }
     url = f"https://api.twitch.tv/helix/channels/vips?broadcaster_id={BROADCASTER_ID}"
@@ -133,7 +133,7 @@ async def is_vip(username):
 
 async def get_broadcaster_id():
     headers = {
-        "Client-ID": TWITCH_CLIENT_ID,
+        "Client-ID": CLIENT_ID,
         "Authorization": f"Bearer {TWITCH_ACCESS_TOKEN}"
     }
     url = "https://api.twitch.tv/helix/users"
