@@ -352,6 +352,7 @@ class Bot(commands.Bot):
             return
         await self.handle_commands(message)
 
+
     @commands.command(name='record')
     async def record(self, ctx):
         stats = await get_club_stats()
