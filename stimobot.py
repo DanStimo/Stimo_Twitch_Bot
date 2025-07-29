@@ -331,8 +331,8 @@ class Bot(commands.Bot):
     def __init__(self):
         super().__init__(
             token=TOKEN,
-            prefix='!',
-            initial_channels=[CHANNEL.lower()],
+            prefix="!",
+            initial_channels=[f"#{CHANNEL.lower()}"],
             client_id=CLIENT_ID,
             client_secret=TWITCH_CLIENT_SECRET,
             bot_id=BOT_ID
