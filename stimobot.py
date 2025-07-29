@@ -332,7 +332,8 @@ import twitchio
 print("[DEBUG] TwitchIO version:", twitchio.__version__)
 
 class Bot(commands.Bot):
-     def __init__(self):
+     
+    def __init__(self):
         print(f"[DEBUG] BOT_ID: {BOT_ID}")
         super().__init__(
             token=TOKEN,
