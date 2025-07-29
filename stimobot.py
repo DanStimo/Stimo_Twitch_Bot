@@ -306,20 +306,17 @@ async def get_club_rank(club_id):
         return None
 
 # Start Discord client just long enough to send the message
-    async def announce_in_discord():
-        await discord_client.wait_until_ready()
-        channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
-        if channel:
-            message = await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
-            try:
-                await asyncio.sleep(60)
-                await message.delete()
-            except Exception as e:
-                print(f"[ERROR] Failed to delete Twitch bot announcement message: {e}")
-        await discord_client.close()
-
-    asyncio.create_task(announce_in_discord())
-        await discord_client.start(DISCORD_TOKEN)
+async def announce_in_discord():
+    await discord_client.wait_until_ready()
+    channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
+    if channel:
+        try:
+            message = await channel.send("✅ - StimoBot is now online!")
+            await asyncio.sleep(60)
+            await message.delete()
+        except Exception as e:
+            print(f"[ERROR] Failed to send/delete Discord message: {e}")
+    await discord_client.close()
 
 class Bot(commands.Bot):
 
