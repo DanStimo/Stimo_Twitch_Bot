@@ -378,6 +378,7 @@ class Bot(commands.Bot):
 
 
     @commands.command(name='versus', aliases=['vs'])
+    print(f"[DEBUG] Received !versus from {ctx.author.name}: {ctx.message.content}")
     async def versus(self, ctx):
         if not (ctx.author.is_mod or ctx.author.is_broadcaster or await is_vip(ctx.author.name)):
             await ctx.send("🚫 You don't have permission to use this command. 🚫")
@@ -414,12 +415,14 @@ class Bot(commands.Bot):
                     if search_response.status_code != 200:
                         await ctx.send("Club not found or EA search API failed.")
                         return
-    
+    print("[DEBUG] Sent response to chat.")
+
                     search_data = search_response.json()
                     if not search_data or not isinstance(search_data, list):
                         await ctx.send("No matching clubs found.")
                         return
-    
+    print("[DEBUG] Sent response to chat.")
+
                     club_names = [club.get("clubInfo", {}).get("name", "") for club in search_data]
                     matches = process.extract(search_input, club_names, scorer=fuzz.token_set_ratio, limit=5)
                     good_matches = [match for match in matches if match[1] >= 5]
@@ -427,17 +430,21 @@ class Bot(commands.Bot):
                     if not good_matches:
                         await ctx.send(f"No clubs found that match '{search_input}'.")
                         return
-    
+    print("[DEBUG] Sent response to chat.")
+
                     match_list = ', '.join([f"{name} ({round(score)}%)" for name, score, _ in good_matches])
                     await ctx.send(f"Did you mean: {match_list}?")
-    
+    print("[DEBUG] Sent response to chat.")
+
+                    print(f"[DEBUG] Received !versus from {ctx.author.name}: {ctx.message.content}")
                     best_match_name = good_matches[0][0]
                     club = next((club for club in search_data if club.get("clubInfo", {}).get("name", "") == best_match_name), None)
     
                     if not club:
                         await ctx.send("Could not retrieve club data.")
                         return
-    
+    print("[DEBUG] Sent response to chat.")
+
                     opponent_id = str(club.get("clubInfo", {}).get("clubId"))
                     club_name_formatted = best_match_name.upper()
     
@@ -507,7 +514,7 @@ class Bot(commands.Bot):
                 print(f"Error in !versus command: {e}")
                 await ctx.send("An error occurred while fetching opponent stats.")
 
-
+print("[DEBUG] Sent response to chat.")
 
 if __name__ == "__main__":
     bot = Bot()
