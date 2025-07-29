@@ -307,16 +307,23 @@ async def get_club_rank(club_id):
 
 # Start Discord client just long enough to send the message
 async def announce_in_discord():
-    await discord_client.wait_until_ready()
-    channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
-    if channel:
-        try:
-            message = await channel.send("✅ - StimoBot is now online!")
-            await asyncio.sleep(60)
-            await message.delete()
-        except Exception as e:
-            print(f"[ERROR] Failed to send/delete Discord message: {e}")
-    await discord_client.close()
+    @discord_client.event
+    async def on_ready():
+        print(f"✅ Discord bot ready as {discord_client.user}")
+        channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
+        if channel:
+            try:
+                message = await channel.send("✅ - StimoBot is now online and ready for commands!")
+                await asyncio.sleep(60)
+                await message.delete()
+            except Exception as e:
+                print(f"[ERROR] Failed to send/delete Discord message: {e}")
+        await discord_client.close()
+
+    try:
+        await discord_client.start(DISCORD_TOKEN)
+    except Exception as e:
+        print(f"[ERROR] Could not start Discord client: {e}")
 
 class Bot(commands.Bot):
 
