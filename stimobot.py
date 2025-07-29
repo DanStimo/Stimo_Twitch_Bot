@@ -314,7 +314,7 @@ async def announce_in_discord():
         channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
         if channel:
             try:
-                message = await channel.send("✅ - StimoBot is now online and ready for commands!")
+                message = await channel.send("✅ - StimoBot (<:twitch:1361925662008541266>) is now online and ready for commands!")
                 await asyncio.sleep(60)
                 await message.delete()
             except Exception as e:
@@ -339,10 +339,10 @@ class Bot(commands.Bot):
         )
 
     async def event_ready(self):
+        await refresh_oauth_token()  # Refresh the token
         username = await get_bot_username()
         print(f"✅ Twitch bot is ready. Logged in as: {username}")
         await update_club_mapping_from_recent_matches(167054)
-    
         asyncio.create_task(announce_in_discord())
 
     async def event_message(self, message):
