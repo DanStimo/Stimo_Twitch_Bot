@@ -378,11 +378,11 @@ class Bot(commands.Bot):
 
 
     @commands.command(name='versus', aliases=['vs'])
-    print(f"[DEBUG] Received !versus from {ctx.author.name}: {ctx.message.content}")
     async def versus(self, ctx):
         if not (ctx.author.is_mod or ctx.author.is_broadcaster or await is_vip(ctx.author.name)):
             await ctx.send("🚫 You don't have permission to use this command. 🚫")
             return
+            print(f"[DEBUG] Received !versus from {ctx.author.name}: {ctx.message.content}")
         
         args = ctx.message.content.split(" ", 1)
         if len(args) != 2:
