@@ -332,11 +332,14 @@ class Bot(commands.Bot):
         super().__init__(
             token=TOKEN,
             prefix='!',
-            initial_channels=[CHANNEL],
+            initial_channels=[CHANNEL.lower()],
             client_id=CLIENT_ID,
             client_secret=TWITCH_CLIENT_SECRET,
             bot_id=BOT_ID
         )
+    
+    async def event_raw_data(self, data):
+        print(f"[RAW IRC] {data}")
 
     async def event_ready(self):
         await refresh_oauth_token()  # Refresh the token
@@ -518,4 +521,4 @@ print("[DEBUG] Sent response to chat.")
 
 if __name__ == "__main__":
     bot = Bot()
-    asyncio.run(bot.run())
+    bot.run()
