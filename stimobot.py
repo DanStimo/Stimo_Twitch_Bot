@@ -5,6 +5,8 @@ from twitchio.ext import commands
 from rapidfuzz import process, fuzz
 import os
 import discord
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 BOT_ID = os.getenv("BOT_ID")
 TOKEN = os.getenv("TOKEN")
@@ -349,7 +351,6 @@ class Bot(commands.Bot):
         await refresh_oauth_token()
         username = await get_bot_username()
         print(f"✅ Twitch bot is ready. Logged in as: {username}")
-        await self.join_channel(CHANNEL)
         await update_club_mapping_from_recent_matches(167054)
 
     async def event_message(self, message):
