@@ -60,7 +60,7 @@ class Bot(commands.Bot):
         )
 
     async def event_ready(self):
-        print(f"✅ Bot is online as: {self.nick}")
+        print(f"✅ Bot is online as: {self.user.name}")
 
         class DiscordAnnouncer(discord.Client):
             async def on_ready(self):
