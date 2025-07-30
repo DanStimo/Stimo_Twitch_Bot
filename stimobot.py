@@ -114,24 +114,20 @@ class Bot(commands.Bot):
             bot_id=BOT_ID
         )
 
-        self.add_command(self.versus)
-        self.add_command(self.hi)
-
     async def event_ready(self):
         print(f"✅ Bot is online as: {self.nick if hasattr(self, 'nick') else self.user.name}")
 
-        # Discord announce
         class DiscordAnnouncer(discord.Client):
             async def on_ready(self):
                 print(f"✅ Discord bot ready as {self.user}")
                 channel = self.get_channel(DISCORD_CHANNEL_ID)
                 if channel:
                     try:
-                        message = await channel.send("✅ - StimoBot is now online!")
+                        msg = await channel.send("✅ - StimoBot is now online!")
                         await asyncio.sleep(60)
-                        await message.delete()
+                        await msg.delete()
                     except Exception as e:
-                        print(f"[ERROR] Discord announce failed: {e}")
+                        print(f"[ERROR] Discord message failed: {e}")
                 await self.close()
 
         asyncio.create_task(DiscordAnnouncer(intents=discord.Intents.default()).start(DISCORD_TOKEN))
@@ -142,12 +138,12 @@ class Bot(commands.Bot):
             return
         await self.handle_commands(message)
 
+    @commands.command(name="hi")
+    async def hi(self, ctx):
+        await ctx.send("Bye.")
+
     @commands.command(name="versus", aliases=["vs"])
     async def versus(self, ctx):
-        # if not (ctx.author.is_mod or ctx.author.is_broadcaster or await is_vip(ctx.author.name)):
-           # await ctx.send("🚫 You don't have permission to use this command.")
-           # return
-
         args = ctx.message.content.split(" ", 1)
         if len(args) < 2:
             await ctx.send("Usage: !versus <Club Name or ID>")
