@@ -258,7 +258,8 @@ class Bot(commands.Bot):
 
 
     async def event_ready(self):
-        print(f"Logged in as | {self.nick}")
+        print(f"✅ Bot is online as: {self.user.name}")
+
         await update_club_mapping_from_recent_matches(167054)
 
         # Start Discord client just long enough to send the message
