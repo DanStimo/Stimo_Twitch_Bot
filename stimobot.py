@@ -18,13 +18,8 @@ CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 TWITCH_ACCESS_TOKEN = os.getenv("TWITCH_ACCESS_TOKEN")
 BROADCASTER_ID = os.getenv("BROADCASTER_ID")
 
-# --- Discord for Announcement (Choose one) ---
-# OPTION 1: Using discord.Client (Requires DISCORD_TOKEN and DISCORD_CHANNEL_ID)
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID", 0))  # Default to 0, ensure it's a valid ID
-
-# OPTION 2: Using Discord Webhook (Requires DISCORD_WEBHOOK_URL)
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
 # --- Load club mapping ---
 try:
@@ -86,20 +81,6 @@ class Bot(commands.Bot):
                 await discord_client.close()  # Close the Discord client after use
             except Exception as e:
                 print(f"Error sending Discord online message via discord.Client: {e}")
-        # --- Option 2: Using Discord Webhook ---
-        elif DISCORD_WEBHOOK_URL:
-            try:
-                async with httpx.AsyncClient() as client:
-                    payload = {"content": "✅ - StimoBot is now online! (via webhook)"}
-                    response = await client.post(DISCORD_WEBHOOK_URL, json=payload)
-                    response.raise_for_status()  # Raise an exception for bad status codes
-                    print("Discord online message sent successfully via webhook.")
-            except httpx.HTTPStatusError as e:
-                print(f"Error sending Discord webhook: {e.response.status_code} - {e.response.text}")
-            except Exception as e:
-                print(f"Error sending Discord webhook: {e}")
-        else:
-            print("Warning: Neither DISCORD_TOKEN/DISCORD_CHANNEL_ID nor DISCORD_WEBHOOK_URL are set. Discord announcement skipped.")
 
     @commands.command(name="hi")
     async def hi(self, ctx):
