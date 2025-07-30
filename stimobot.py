@@ -111,21 +111,25 @@ class Bot(commands.Bot):
     async def event_ready(self):
         print(f"✅ Bot is online as: {self.nick if hasattr(self, 'nick') else self.user.name}")
         await update_club_mapping_from_recent_matches(CLUB_ID)
-
-        async def announce():
-            await discord_client.wait_until_ready()
-            channel = discord_client.get_channel(DISCORD_CHANNEL_ID)
-            if channel:
-                try:
-                    message = await channel.send("✅ - StimoBot is now online!")
-                    await asyncio.sleep(60)
-                    await message.delete()
-                except Exception as e:
-                    print(f"[ERROR] Discord announce failed: {e}")
-            await discord_client.close()
-
-        asyncio.create_task(announce())
-        asyncio.create_task(discord_client.start(DISCORD_TOKEN))
+    
+        async def start_discord_and_announce():
+            class DiscordAnnouncer(discord.Client):
+                async def on_ready(self):
+                    print(f"✅ Discord bot ready as {self.user}")
+                    channel = self.get_channel(DISCORD_CHANNEL_ID)
+                    if channel:
+                        try:
+                            message = await channel.send("✅ - StimoBot is now online!")
+                            await asyncio.sleep(60)
+                            await message.delete()
+                        except Exception as e:
+                            print(f"[ERROR] Discord announce failed: {e}")
+                    await self.close()
+    
+            discord_bot = DiscordAnnouncer(intents=discord.Intents.default())
+            await discord_bot.start(DISCORD_TOKEN)
+    
+        asyncio.create_task(start_discord_and_announce())
 
     async def event_message(self, message):
         if message.echo or message.author is None:
