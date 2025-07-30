@@ -2,7 +2,7 @@ import asyncio
 import httpx
 import json
 from twitchio.ext import commands
-from rapidfuzz import process, fuzz
+from rapidfuzz import fuzz
 import os
 import discord
 
@@ -12,23 +12,23 @@ CHANNEL = os.getenv("CHANNEL", "stimo").lower()
 CLUB_ID = os.getenv("CLUB_ID")
 PLATFORM = os.getenv("PLATFORM", "common-gen5")
 
-TOKEN = os.getenv("TOKEN")  # IRC token (must start with 'oauth:')
+TOKEN = os.getenv("TOKEN")  # Must start with 'oauth:'
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-TWITCH_ACCESS_TOKEN = os.getenv("TWITCH_ACCESS_TOKEN")  # Helix token
+TWITCH_ACCESS_TOKEN = os.getenv("TWITCH_ACCESS_TOKEN")
 BROADCASTER_ID = os.getenv("BROADCASTER_ID")
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
 
-# --- Load Club Mapping ---
+# --- Load club mapping ---
 try:
     with open("club_mapping.json", "r") as f:
         club_mapping = json.load(f)
 except FileNotFoundError:
     club_mapping = {}
 
-# --- Utility Functions ---
+# --- Utility functions ---
 def normalize(name):
     return ''.join(name.lower().split())
 
@@ -46,61 +46,6 @@ def streak_emoji(value):
     except:
         return "❓"
 
-async def is_vip(username):
-    headers = {
-        "Client-ID": CLIENT_ID,
-        "Authorization": f"Bearer {TWITCH_ACCESS_TOKEN}"
-    }
-    url = f"https://api.twitch.tv/helix/channels/vips?broadcaster_id={BROADCASTER_ID}"
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, headers=headers)
-            if response.status_code == 200:
-                vip_list = response.json().get("data", [])
-                return any(vip["user_name"].lower() == username.lower() for vip in vip_list)
-        except Exception as e:
-            print(f"[ERROR] VIP check failed: {e}")
-    return False
-
-async def get_club_stats(club_id):
-    url = f"https://proclubs.ea.com/api/fc/clubs/overallStats?platform={PLATFORM}&clubIds={club_id}"
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-        if response.status_code == 200:
-            data = response.json()
-            if isinstance(data, list) and data:
-                return data[0]
-    return None
-
-async def get_recent_form(club_id):
-    url = f"https://proclubs.ea.com/api/fc/clubs/matches?platform={PLATFORM}&clubIds={club_id}&matchType=leagueMatch"
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-        if response.status_code == 200:
-            matches = response.json()
-            results = []
-            for match in sorted(matches, key=lambda x: x.get("timestamp", 0), reverse=True)[:5]:
-                clubs = match.get("clubs", {})
-                this_club = clubs.get(str(club_id))
-                opponent_id = next((cid for cid in clubs if cid != str(club_id)), None)
-                opp = clubs.get(opponent_id)
-                if not this_club or not opp:
-                    continue
-                us, them = int(this_club["goals"]), int(opp["goals"])
-                results.append("✅" if us > them else "❌" if us < them else "➖")
-            return results
-    return []
-
-async def get_club_rank(club_id):
-    url = f"https://proclubs.ea.com/api/fc/allTimeLeaderboard?platform={PLATFORM}"
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-        if response.status_code == 200:
-            for idx, entry in enumerate(response.json()):
-                if str(entry.get("clubInfo", {}).get("clubId")) == str(club_id):
-                    return idx + 1
-    return None
-
 # --- Twitch Bot ---
 class Bot(commands.Bot):
 
@@ -115,7 +60,7 @@ class Bot(commands.Bot):
         )
 
     async def event_ready(self):
-        print(f"✅ Bot is online as: {self.nick if hasattr(self, 'nick') else self.user.name}")
+        print(f"✅ Bot is online as: {self.nick}")
 
         class DiscordAnnouncer(discord.Client):
             async def on_ready(self):
@@ -127,16 +72,10 @@ class Bot(commands.Bot):
                         await asyncio.sleep(60)
                         await msg.delete()
                     except Exception as e:
-                        print(f"[ERROR] Discord message failed: {e}")
+                        print(f"[ERROR] Discord announce failed: {e}")
                 await self.close()
 
         asyncio.create_task(DiscordAnnouncer(intents=discord.Intents.default()).start(DISCORD_TOKEN))
-
-    async def event_message(self, message):
-        print(f"[DEBUG] {message.author.name}: {message.content}")
-        if message.echo or message.author is None:
-            return
-        await self.handle_commands(message)
 
     @commands.command(name="hi")
     async def hi(self, ctx):
@@ -198,10 +137,50 @@ class Bot(commands.Bot):
 
         await ctx.send(message)
 
+# --- EA API Helpers ---
+async def get_club_stats(club_id):
+    url = f"https://proclubs.ea.com/api/fc/clubs/overallStats?platform={PLATFORM}&clubIds={club_id}"
+    async with httpx.AsyncClient(timeout=10) as client:
+        res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        if res.status_code == 200:
+            data = res.json()
+            if isinstance(data, list) and data:
+                return data[0]
+    return None
+
+async def get_recent_form(club_id):
+    url = f"https://proclubs.ea.com/api/fc/clubs/matches?platform={PLATFORM}&clubIds={club_id}&matchType=leagueMatch"
+    async with httpx.AsyncClient(timeout=10) as client:
+        res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        if res.status_code == 200:
+            matches = res.json()
+            results = []
+            for match in sorted(matches, key=lambda x: x.get("timestamp", 0), reverse=True)[:5]:
+                clubs = match.get("clubs", {})
+                this_club = clubs.get(str(club_id))
+                opponent_id = next((cid for cid in clubs if cid != str(club_id)), None)
+                opp = clubs.get(opponent_id)
+                if not this_club or not opp:
+                    continue
+                us, them = int(this_club["goals"]), int(opp["goals"])
+                results.append("✅" if us > them else "❌" if us < them else "➖")
+            return results
+    return []
+
+async def get_club_rank(club_id):
+    url = f"https://proclubs.ea.com/api/fc/allTimeLeaderboard?platform={PLATFORM}"
+    async with httpx.AsyncClient(timeout=10) as client:
+        res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        if res.status_code == 200:
+            for idx, entry in enumerate(res.json()):
+                if str(entry.get("clubInfo", {}).get("clubId")) == str(club_id):
+                    return idx + 1
+    return None
+
 # --- Run Bot ---
 if __name__ == "__main__":
     if not TOKEN or not TOKEN.startswith("oauth:"):
         print("❌ Invalid IRC token! Must start with 'oauth:'")
     else:
         bot = Bot()
-        asyncio.run(bot.run())
+        bot.run()  # ✅ Correct usage for TwitchIO v3
