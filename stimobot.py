@@ -114,6 +114,8 @@ class Bot(commands.Bot):
             bot_id=BOT_ID
         )
 
+        self.load_modules(__name__)
+
     async def event_ready(self):
         print(f"✅ Bot is online as: {self.nick if hasattr(self, 'nick') else self.user.name}")
 
