@@ -77,6 +77,12 @@ class Bot(commands.Bot):
 
         asyncio.create_task(DiscordAnnouncer(intents=discord.Intents.default()).start(DISCORD_TOKEN))
 
+    async def event_message(self, message):
+        print(f"[DEBUG] {message.author.name}: {message.content}")
+        if message.echo:
+            return
+        await self.handle_commands(message)
+
     @commands.command(name="hi")
     async def hi(self, ctx):
         await ctx.send("Bye.")
@@ -136,6 +142,7 @@ class Bot(commands.Bot):
         )
 
         await ctx.send(message)
+
 
 # --- EA API Helpers ---
 async def get_club_stats(club_id):
