@@ -6,7 +6,9 @@ from rapidfuzz import process, fuzz
 import os
 import discord
 
-BOT_NICK = os.getenv("BOT_NICK")
+BOT_ID = os.getenv("BOT_ID")
+CLIENT_ID = os.getenv("CLIENT_ID")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 TOKEN = os.getenv("TOKEN")
 CHANNEL = os.getenv("CHANNEL")
 CLUB_ID = os.getenv("CLUB_ID")
@@ -245,7 +247,15 @@ async def get_club_rank(club_id):
 class Bot(commands.Bot):
 
     def __init__(self):
-        super().__init__(token=TOKEN, prefix='!', initial_channels=[CHANNEL])
+        super().__init__(
+            token=TOKEN,
+            prefix='!',
+            initial_channels=[CHANNEL.lower()],
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            bot_id=BOT_ID
+        )
+
 
     async def event_ready(self):
         print(f"Logged in as | {self.nick}")
