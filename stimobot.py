@@ -132,6 +132,7 @@ class Bot(commands.Bot):
         asyncio.create_task(start_discord_and_announce())
 
     async def event_message(self, message):
+        print(f"[DEBUG] Message from {message.author.name}: {message.content}")
         if message.echo or message.author is None:
             return
         await self.handle_commands(message)
