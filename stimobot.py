@@ -115,7 +115,6 @@ class Bot(commands.Bot):
         )
 
         self.add_command(self.versus)
-        self.add_command(self.record)
         self.add_command(self.hi)
 
     async def event_ready(self):
