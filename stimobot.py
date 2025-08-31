@@ -83,8 +83,8 @@ class Bot(commands.Bot):
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
-        # Send a startup message in chat
-        for chan in self.connected_channels:
+        chan = self.get_channel(CHANNEL)
+        if chan:
             await chan.send("✅ StimoBot is online and watching Spotify 🎶")
         asyncio.create_task(self.spotify_loop())
 
@@ -96,12 +96,12 @@ class Bot(commands.Bot):
                     if track and track["id"] != self._last_track_id:
                         self._last_track_id = track["id"]
                         msg = f"🎶 Now playing: {track['title']} — {track['artists']} {track['url']}"
-                        for chan in self.connected_channels:
+                        chan = self.get_channel(CHANNEL)
+                        if chan:
                             await chan.send(msg)
                 except Exception as e:
                     print(f"[Spotify Error] {e}")
                 await asyncio.sleep(POLL_SECONDS)
-
 
 # --- Run bot ---
 if __name__ == "__main__":
