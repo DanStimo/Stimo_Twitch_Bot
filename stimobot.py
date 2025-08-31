@@ -91,8 +91,16 @@ class Bot(commands.Bot):
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
+        try:
+            chan = self.get_channel(CHANNEL)  # works in v3 with initial_channels
+            if chan:
+                await chan.send("👋 StimoBot is here!")
+            else:
+                print("[DEBUG] get_channel returned None")
+        except Exception as e:
+            print(f"[Startup Error] Could not send startup message: {e}")
+    
         asyncio.create_task(self.spotify_loop())
-        await self.connected_channels[0].send("👋 StimoBot is here!")
 
     async def spotify_loop(self):
         async with aiohttp.ClientSession() as session:
