@@ -1,191 +1,109 @@
-import asyncio
-import httpx
-import json
-from twitchio.ext import commands
-from rapidfuzz import fuzz
 import os
-import discord
+import asyncio
+import time
+import aiohttp
+from twitchio.ext import commands
 
-# --- Environment Variables ---
-BOT_ID = os.getenv("BOT_ID")
-CHANNEL = os.getenv("CHANNEL", "stimo").lower()
-CLUB_ID = os.getenv("CLUB_ID")
-PLATFORM = os.getenv("PLATFORM", "common-gen5")
+# --- Env vars (set these in your .env or Railway service variables) ---
+TWITCH_IRC_TOKEN = os.getenv("TWITCH_IRC_TOKEN")  # must start with "oauth:"
+CLIENT_ID        = os.getenv("CLIENT_ID")
+CLIENT_SECRET    = os.getenv("CLIENT_SECRET")
+BOT_ID           = os.getenv("BOT_ID")  # your bot's user id or username
+CHANNEL          = os.getenv("CHANNEL", "stimo").lower()
 
-TOKEN = os.getenv("TOKEN")  # Must start with 'oauth:'
-CLIENT_ID = os.getenv("CLIENT_ID")
-CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-TWITCH_ACCESS_TOKEN = os.getenv("TWITCH_ACCESS_TOKEN")
-BROADCASTER_ID = os.getenv("BROADCASTER_ID")
+SPOTIFY_CLIENT_ID     = os.getenv("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+SPOTIFY_REFRESH_TOKEN = os.getenv("SPOTIFY_REFRESH_TOKEN")
 
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
+POLL_SECONDS = 5
 
-# --- Load club mapping ---
-try:
-    with open("club_mapping.json", "r") as f:
-        club_mapping = json.load(f)
-except FileNotFoundError:
-    club_mapping = {}
 
-def normalize(name):
-    return ''.join(name.lower().split())
+# --- Spotify Client ---
+class SpotifyClient:
+    def __init__(self, client_id, client_secret, refresh_token):
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.refresh_token = refresh_token
+        self.access_token = None
+        self.expires_at = 0
 
-def streak_emoji(value):
-    try:
-        value = int(value)
-        if value <= 5:
-            return "❄️"
-        elif value <= 9:
-            return "🔥"
-        elif value <= 19:
-            return "🔥🔥"
-        else:
-            return "🔥🔥🔥"
-    except:
-        return "❓"
+    async def _refresh_access_token(self, session: aiohttp.ClientSession):
+        if self.access_token and time.time() < self.expires_at - 10:
+            return self.access_token
 
-# --- EA API Helpers ---
-async def get_club_stats(club_id):
-    url = f"https://proclubs.ea.com/api/fc/clubs/overallStats?platform={PLATFORM}&clubIds={club_id}"
-    async with httpx.AsyncClient(timeout=10) as client:
-        res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-        if res.status_code == 200:
-            data = res.json()
-            if isinstance(data, list) and data:
-                return data[0]
-    return None
+        data = {
+            "grant_type": "refresh_token",
+            "refresh_token": self.refresh_token,
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+        }
+        async with session.post("https://accounts.spotify.com/api/token", data=data) as r:
+            tok = await r.json()
+            if "access_token" not in tok:
+                raise RuntimeError(f"Failed to refresh Spotify token: {tok}")
+            self.access_token = tok["access_token"]
+            self.expires_at = time.time() + tok.get("expires_in", 3600)
+            return self.access_token
 
-async def get_recent_form(club_id):
-    url = f"https://proclubs.ea.com/api/fc/clubs/matches?platform={PLATFORM}&clubIds={club_id}&matchType=leagueMatch"
-    async with httpx.AsyncClient(timeout=10) as client:
-        res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-        if res.status_code == 200:
-            matches = res.json()
-            results = []
-            for match in sorted(matches, key=lambda x: x.get("timestamp", 0), reverse=True)[:5]:
-                clubs = match.get("clubs", {})
-                this_club = clubs.get(str(club_id))
-                opponent_id = next((cid for cid in clubs if cid != str(club_id)), None)
-                opp = clubs.get(opponent_id)
-                if not this_club or not opp:
-                    continue
-                us, them = int(this_club["goals"]), int(opp["goals"])
-                results.append("✅" if us > them else "❌" if us < them else "➖")
-            return results
-    return []
+    async def get_current_track(self, session: aiohttp.ClientSession):
+        token = await self._refresh_access_token(session)
+        headers = {"Authorization": f"Bearer {token}"}
+        async with session.get("https://api.spotify.com/v1/me/player/currently-playing", headers=headers) as r:
+            if r.status == 204:  # nothing playing
+                return None
+            if r.status != 200:
+                return None
+            j = await r.json()
+            if not j.get("is_playing"):
+                return None
+            item = j.get("item")
+            if not item:
+                return None
+            if item.get("type") != "track":
+                return None
+            track_id = item.get("id")
+            title = item.get("name")
+            artists = ", ".join(a["name"] for a in item.get("artists", []))
+            url = item.get("external_urls", {}).get("spotify", "")
+            return {"id": track_id, "title": title, "artists": artists, "url": url}
 
-async def get_club_rank(club_id):
-    url = f"https://proclubs.ea.com/api/fc/allTimeLeaderboard?platform={PLATFORM}"
-    async with httpx.AsyncClient(timeout=10) as client:
-        res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-        if res.status_code == 200:
-            for idx, entry in enumerate(res.json()):
-                if str(entry.get("clubInfo", {}).get("clubId")) == str(club_id):
-                    return idx + 1
-    return None
 
 # --- Twitch Bot ---
 class Bot(commands.Bot):
-
     def __init__(self):
         super().__init__(
-            token=TOKEN,
+            token=TWITCH_IRC_TOKEN,
             prefix="!",
             initial_channels=[CHANNEL],
             client_id=CLIENT_ID,
             client_secret=CLIENT_SECRET,
-            bot_id=BOT_ID
+            bot_id=BOT_ID,
         )
+        self.spotify = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN)
+        self._last_track_id = None
 
     async def event_ready(self):
-        print(f"✅ Bot is online as: {self.user.name}")
+        print(f"✅ Connected as {self.nick}")
+        asyncio.create_task(self.spotify_loop())
 
-        class DiscordAnnouncer(discord.Client):
-            async def on_ready(self):
-                print(f"✅ Discord bot ready as {self.user}")
-                channel = self.get_channel(DISCORD_CHANNEL_ID)
-                if channel:
-                    try:
-                        msg = await channel.send("✅ - StimoBot is now online!")
-                        await asyncio.sleep(60)
-                        await msg.delete()
-                    except Exception as e:
-                        print(f"[ERROR] Discord announce failed: {e}")
-                await self.close()
+    async def spotify_loop(self):
+        async with aiohttp.ClientSession() as session:
+            while True:
+                try:
+                    track = await self.spotify.get_current_track(session)
+                    if track and track["id"] != self._last_track_id:
+                        self._last_track_id = track["id"]
+                        msg = f"🎶 Now playing: {track['title']} — {track['artists']} {track['url']}"
+                        for chan in self.connected_channels:
+                            await chan.send(msg)
+                except Exception as e:
+                    print(f"[Spotify Error] {e}")
+                await asyncio.sleep(POLL_SECONDS)
 
-        asyncio.create_task(DiscordAnnouncer(intents=discord.Intents.default()).start(DISCORD_TOKEN))
 
-    async def event_message(self, message):
-        print(f"[DEBUG] {message.author.name}: {message.content}")
-        if message.echo:
-            return
-        await self.handle_commands(message)
-
-    @commands.command(name="hi")
-    async def hi(self, ctx):
-        await ctx.send("Bye.")
-
-    @commands.command(name="versus", aliases=["vs"])
-    async def versus(self, ctx):
-        args = ctx.message.content.split(" ", 1)
-        if len(args) < 2:
-            await ctx.send("Usage: !versus <Club Name or ID>")
-            return
-
-        search_input = args[1].strip()
-        normalized_input = normalize(search_input)
-        matched_club_id = None
-
-        for cid, name in club_mapping.items():
-            if normalize(name) == normalized_input:
-                matched_club_id = cid
-                break
-
-        async with httpx.AsyncClient(timeout=10) as client:
-            if not matched_club_id:
-                if search_input.isdigit():
-                    matched_club_id = search_input
-                else:
-                    search_url = f"https://proclubs.ea.com/api/fc/allTimeLeaderboard/search?platform={PLATFORM}&clubName={search_input}"
-                    res = await client.get(search_url)
-                    if res.status_code == 200 and isinstance(res.json(), list):
-                        best = max(res.json(), key=lambda c: fuzz.token_set_ratio(search_input, c.get("clubInfo", {}).get("name", "")))
-                        matched_club_id = str(best.get("clubInfo", {}).get("clubId"))
-
-        if not matched_club_id:
-            await ctx.send("Could not find matching club.")
-            return
-
-        stats = await get_club_stats(matched_club_id)
-        recent_form = await get_recent_form(matched_club_id)
-        rank = await get_club_rank(matched_club_id)
-
-        if not stats:
-            await ctx.send("Could not fetch opponent stats.")
-            return
-
-        club_name = stats.get("name", f"Club {matched_club_id}")
-        form = " ".join(recent_form)
-        message = (
-            f"{club_name.upper()}'s Record | "
-            f"📈 Rank: #{rank or 'Unranked'} | "
-            f"🏅 SR: {stats.get('skillRating', 'N/A')} | "
-            f"🎮 {stats.get('gamesPlayed', 'N/A')} | "
-            f"✅ {stats.get('wins', 'N/A')} | "
-            f"➖ {stats.get('ties', 'N/A')} | "
-            f"❌ {stats.get('losses', 'N/A')} | "
-            f"🔥 Win Streak: {stats.get('wstreak', '0')} {streak_emoji(stats.get('wstreak', 0))} | "
-            f"🛡️ Unbeaten: {stats.get('unbeatenstreak', '0')} {streak_emoji(stats.get('unbeatenstreak', 0))} | "
-            f"Recent Form: {form or 'No matches'}"
-        )
-
-        await ctx.send(message)
-
-# --- Run Bot ---
+# --- Run bot ---
 if __name__ == "__main__":
-    if not TOKEN or not TOKEN.startswith("oauth:"):
-        print("❌ Invalid IRC token! Must start with 'oauth:'")
+    if not TWITCH_IRC_TOKEN or not TWITCH_IRC_TOKEN.startswith("oauth:"):
+        print("❌ Missing or invalid Twitch IRC token (must start with 'oauth:')")
     else:
-        bot = Bot()
-        bot.run()
+        Bot().run()
