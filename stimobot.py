@@ -83,6 +83,9 @@ class Bot(commands.Bot):
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
+        # Send a startup message in chat
+        for chan in self.connected_channels:
+            await chan.send("✅ StimoBot is online and watching Spotify 🎶")
         asyncio.create_task(self.spotify_loop())
 
     async def spotify_loop(self):
