@@ -86,4 +86,47 @@ class Bot(commands.Bot):
             client_secret=CLIENT_SECRET,
             bot_id=BOT_ID,
         )
-        self.spotif
+        self.spotify = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN)
+        self._last_track_id = None
+
+    async def event_ready(self):
+        print(f"✅ Connected as {self.user.name}")
+        asyncio.create_task(self.spotify_loop())
+
+    async def spotify_loop(self):
+        async with aiohttp.ClientSession() as session:
+            while True:
+                try:
+                    track = await self.spotify.get_current_track(session)
+                    if track and track["id"] != self._last_track_id:
+                        self._last_track_id = track["id"]
+                        msg = f"🎶 Now playing: {track['title']} — {track['artists']} {track['url']}"
+                        print(f"[DEBUG] Sending message: {msg}")
+                        # TODO: replace with correct channel send logic
+                    else:
+                        print("[DEBUG] No new track or nothing playing")
+                except Exception as e:
+                    print(f"[Spotify Error] {e}")
+                await asyncio.sleep(POLL_SECONDS)
+
+# --- Run bot ---
+if __name__ == "__main__":
+    print("=== Environment Debug ===")
+    print(f"TOKEN present? {'yes' if TOKEN else 'no'}")
+    if TOKEN:
+        print(f"TOKEN startswith 'oauth:'? {TOKEN.startswith('oauth:')}")
+        print(f"TOKEN preview: {TOKEN[:10]}...")
+    print(f"CLIENT_ID: {CLIENT_ID}")
+    print(f"CLIENT_SECRET present? {'yes' if CLIENT_SECRET else 'no'}")
+    print(f"BOT_ID: {BOT_ID}")
+    print(f"CHANNEL: {CHANNEL}")
+    print(f"SPOTIFY_CLIENT_ID present? {'yes' if SPOTIFY_CLIENT_ID else 'no'}")
+    print(f"SPOTIFY_CLIENT_SECRET present? {'yes' if SPOTIFY_CLIENT_SECRET else 'no'}")
+    print(f"SPOTIFY_REFRESH_TOKEN present? {'yes' if SPOTIFY_REFRESH_TOKEN else 'no'}")
+    print("=========================")
+
+    if not TOKEN or not TOKEN.startswith("oauth:"):
+        print("❌ Missing or invalid Twitch IRC token (must start with 'oauth:')")
+    else:
+        print("[DEBUG] Running Bot() now...")
+        Bot().run()
