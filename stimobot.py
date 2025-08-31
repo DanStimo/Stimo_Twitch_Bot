@@ -83,9 +83,11 @@ class Bot(commands.Bot):
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
-        chan = self.get_channel(CHANNEL)
-        if chan:
+        try:
+            chan = await self.fetch_channel(CHANNEL)
             await chan.send("✅ StimoBot is online and watching Spotify 🎶")
+        except Exception as e:
+            print(f"[Startup Error] Could not send startup message: {e}")
         asyncio.create_task(self.spotify_loop())
 
     async def spotify_loop(self):
@@ -96,9 +98,11 @@ class Bot(commands.Bot):
                     if track and track["id"] != self._last_track_id:
                         self._last_track_id = track["id"]
                         msg = f"🎶 Now playing: {track['title']} — {track['artists']} {track['url']}"
-                        chan = self.get_channel(CHANNEL)
-                        if chan:
+                        try:
+                            chan = await self.fetch_channel(CHANNEL)
                             await chan.send(msg)
+                        except Exception as e:
+                            print(f"[Spotify Error] Could not send to Twitch: {e}")
                 except Exception as e:
                     print(f"[Spotify Error] {e}")
                 await asyncio.sleep(POLL_SECONDS)
