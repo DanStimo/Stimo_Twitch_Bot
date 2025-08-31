@@ -4,12 +4,12 @@ import time
 import aiohttp
 from twitchio.ext import commands
 
-# --- Env vars (set these in your .env or Railway service variables) ---
-TWITCH_IRC_TOKEN = os.getenv("TWITCH_IRC_TOKEN")  # must start with "oauth:"
-CLIENT_ID        = os.getenv("CLIENT_ID")
-CLIENT_SECRET    = os.getenv("CLIENT_SECRET")
-BOT_ID           = os.getenv("BOT_ID")  # your bot's user id or username
-CHANNEL          = os.getenv("CHANNEL", "stimo").lower()
+# --- Railway Env Vars ---
+TOKEN               = os.getenv("TOKEN")               # Twitch IRC token (must start with oauth:)
+CLIENT_ID           = os.getenv("CLIENT_ID")           # Twitch client id
+CLIENT_SECRET       = os.getenv("CLIENT_SECRET")       # Twitch client secret
+BOT_ID              = os.getenv("BOT_ID")              # Twitch bot user id
+CHANNEL             = os.getenv("CHANNEL", "stimo").lower()
 
 SPOTIFY_CLIENT_ID     = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
@@ -57,22 +57,21 @@ class SpotifyClient:
             if not j.get("is_playing"):
                 return None
             item = j.get("item")
-            if not item:
+            if not item or item.get("type") != "track":
                 return None
-            if item.get("type") != "track":
-                return None
-            track_id = item.get("id")
-            title = item.get("name")
-            artists = ", ".join(a["name"] for a in item.get("artists", []))
-            url = item.get("external_urls", {}).get("spotify", "")
-            return {"id": track_id, "title": title, "artists": artists, "url": url}
+            return {
+                "id": item.get("id"),
+                "title": item.get("name"),
+                "artists": ", ".join(a["name"] for a in item.get("artists", [])),
+                "url": item.get("external_urls", {}).get("spotify", ""),
+            }
 
 
 # --- Twitch Bot ---
 class Bot(commands.Bot):
     def __init__(self):
         super().__init__(
-            token=TWITCH_IRC_TOKEN,
+            token=TOKEN,
             prefix="!",
             initial_channels=[CHANNEL],
             client_id=CLIENT_ID,
@@ -103,7 +102,7 @@ class Bot(commands.Bot):
 
 # --- Run bot ---
 if __name__ == "__main__":
-    if not TWITCH_IRC_TOKEN or not TWITCH_IRC_TOKEN.startswith("oauth:"):
+    if not TOKEN or not TOKEN.startswith("oauth:"):
         print("❌ Missing or invalid Twitch IRC token (must start with 'oauth:')")
     else:
         Bot().run()
