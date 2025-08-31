@@ -86,15 +86,17 @@ class Bot(commands.Bot):
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
-        # Give Twitch a moment to finish IRC join
-        await asyncio.sleep(2)
-        self._chan = self.get_channel(CHANNEL)
-        if self._chan:
-            print(f"[DEBUG] Resolved channel: {CHANNEL}")
-            await self._chan.send("✅ StimoBot is online and watching Spotify 🎶")
-        else:
-            print(f"[Startup Error] Could not resolve channel: {CHANNEL}")
         asyncio.create_task(self.spotify_loop())
+
+    async def event_message(self, message):
+        # Cache the channel from first message seen
+        if self._chan is None:
+            self._chan = message.channel
+            print(f"[DEBUG] Cached channel: {self._chan.name}")
+            await self._chan.send("✅ StimoBot is online and watching Spotify 🎶")
+
+        # Still process commands if you ever add them
+        await self.handle_commands(message)
 
     async def spotify_loop(self):
         # wait until channel is cached
