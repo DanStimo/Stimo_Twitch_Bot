@@ -43,6 +43,7 @@ class SpotifyClient:
                 raise RuntimeError(f"Failed to refresh Spotify token: {tok}")
             self.access_token = tok["access_token"]
             self.expires_at = time.time() + tok.get("expires_in", 3600)
+            print("[DEBUG] Refreshed Spotify access token")
             return self.access_token
 
     async def get_current_track(self, session: aiohttp.ClientSession):
@@ -52,6 +53,7 @@ class SpotifyClient:
             if r.status == 204:  # nothing playing
                 return None
             if r.status != 200:
+                print(f"[DEBUG] Spotify API returned status {r.status}")
                 return None
             j = await r.json()
             if not j.get("is_playing"):
@@ -80,21 +82,24 @@ class Bot(commands.Bot):
         )
         self.spotify = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN)
         self._last_track_id = None
-        self._chan = None  # store IRC channel once joined
+        self._chan = None
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
+        # Give Twitch a moment to finish IRC join
+        await asyncio.sleep(2)
+        self._chan = self.get_channel(CHANNEL)
+        if self._chan:
+            print(f"[DEBUG] Resolved channel: {CHANNEL}")
+            await self._chan.send("✅ StimoBot is online and watching Spotify 🎶")
+        else:
+            print(f"[Startup Error] Could not resolve channel: {CHANNEL}")
         asyncio.create_task(self.spotify_loop())
 
-    async def event_channel_joined(self, channel):
-        """Called when the bot joins the IRC channel."""
-        print(f"✅ Joined channel: {channel.name}")
-        self._chan = channel
-        await channel.send("✅ StimoBot is online and watching Spotify 🎶")
-
     async def spotify_loop(self):
-        # wait until channel is joined
+        # wait until channel is cached
         while not self._chan:
+            print("[DEBUG] Waiting for channel object...")
             await asyncio.sleep(1)
 
         async with aiohttp.ClientSession() as session:
@@ -104,7 +109,10 @@ class Bot(commands.Bot):
                     if track and track["id"] != self._last_track_id:
                         self._last_track_id = track["id"]
                         msg = f"🎶 Now playing: {track['title']} — {track['artists']} {track['url']}"
+                        print(f"[DEBUG] Sending message: {msg}")
                         await self._chan.send(msg)
+                    else:
+                        print("[DEBUG] No new track or nothing playing")
                 except Exception as e:
                     print(f"[Spotify Error] {e}")
                 await asyncio.sleep(POLL_SECONDS)
