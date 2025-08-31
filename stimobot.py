@@ -80,17 +80,23 @@ class Bot(commands.Bot):
         )
         self.spotify = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN)
         self._last_track_id = None
+        self._chan = None  # store IRC channel once joined
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
-        try:
-            chan = await self.fetch_channel(CHANNEL)
-            await chan.send("✅ StimoBot is online and watching Spotify 🎶")
-        except Exception as e:
-            print(f"[Startup Error] Could not send startup message: {e}")
         asyncio.create_task(self.spotify_loop())
 
+    async def event_channel_joined(self, channel):
+        """Called when the bot joins the IRC channel."""
+        print(f"✅ Joined channel: {channel.name}")
+        self._chan = channel
+        await channel.send("✅ StimoBot is online and watching Spotify 🎶")
+
     async def spotify_loop(self):
+        # wait until channel is joined
+        while not self._chan:
+            await asyncio.sleep(1)
+
         async with aiohttp.ClientSession() as session:
             while True:
                 try:
@@ -98,14 +104,11 @@ class Bot(commands.Bot):
                     if track and track["id"] != self._last_track_id:
                         self._last_track_id = track["id"]
                         msg = f"🎶 Now playing: {track['title']} — {track['artists']} {track['url']}"
-                        try:
-                            chan = await self.fetch_channel(CHANNEL)
-                            await chan.send(msg)
-                        except Exception as e:
-                            print(f"[Spotify Error] Could not send to Twitch: {e}")
+                        await self._chan.send(msg)
                 except Exception as e:
                     print(f"[Spotify Error] {e}")
                 await asyncio.sleep(POLL_SECONDS)
+
 
 # --- Run bot ---
 if __name__ == "__main__":
