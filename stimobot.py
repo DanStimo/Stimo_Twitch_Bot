@@ -92,6 +92,7 @@ class Bot(commands.Bot):
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
         asyncio.create_task(self.spotify_loop())
+        await self.connected_channels[0].send("👋 StimoBot is here!")
 
     async def spotify_loop(self):
         async with aiohttp.ClientSession() as session:
