@@ -82,7 +82,7 @@ class Bot(commands.Bot):
         self._last_track_id = None
 
     async def event_ready(self):
-        print(f"✅ Connected as {self.nick}")
+        print(f"✅ Connected as {self.user.name}")
         asyncio.create_task(self.spotify_loop())
 
     async def spotify_loop(self):
