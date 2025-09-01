@@ -2,6 +2,7 @@ import os
 import asyncio
 import time
 import aiohttp
+import requests
 from twitchio.ext import commands
 
 # --- Railway Env Vars ---
@@ -88,7 +89,7 @@ class Bot(commands.Bot):
         super().__init__(
             token=TOKEN,
             prefix="!",
-            initial_channels=[CHANNEL],   # IRC join (viewer list)
+            initial_channels=[CHANNEL],   # attempt IRC join (viewer list)
             client_id=CLIENT_ID,
             client_secret=CLIENT_SECRET,
             bot_id=BOT_ID,
@@ -106,8 +107,6 @@ class Bot(commands.Bot):
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
-        # In TwitchIO v3, initial_channels is enough; no join_channels() exists.
-        print(f"[DEBUG] Waiting for IRC JOIN to #{CHANNEL} via initial_channels...")
         asyncio.create_task(self.bootstrap_helix_and_run())
 
     async def bootstrap_helix_and_run(self):
@@ -149,7 +148,10 @@ class Bot(commands.Bot):
             return j["data"][0]["id"]
 
     async def _helix_announce(self, session: aiohttp.ClientSession, text: str, color: str = "primary") -> bool:
-        """Send a Twitch announcement (colored highlight)."""
+        """
+        Send a Twitch announcement (colored highlight).
+        Requires bot to be moderator and token with moderator:manage:announcements.
+        """
         if not (self._broadcaster_id and BOT_ID and self._user_token_plain and CLIENT_ID):
             return False
 
@@ -171,24 +173,6 @@ class Bot(commands.Bot):
             body = await r.text()
             print(f"[Helix Announce Error] {r.status} {body}")
             return False
-
-    async def event_join(self, channel, user):
-        """Cache IRC channel when this bot joins (viewer list presence)."""
-        if getattr(user, "name", "").lower() == getattr(self.user, "name", "").lower():
-            self._irc_channel = channel
-            print(f"[DEBUG] Bot joined IRC channel: {channel.name}")
-            try:
-                # IRC hello message
-                await channel.send("👋 StimoBot has joined the chat via IRC!")
-            except Exception as e:
-                print(f"[Startup Error] IRC hello failed: {e}")
-
-    async def event_message(self, message):
-        """Fallback: cache IRC channel from the first message if join event is missed."""
-        if self._irc_channel is None:
-            self._irc_channel = message.channel
-            print(f"[DEBUG] Cached IRC channel from message: {self._irc_channel.name}")
-        await self.handle_commands(message)
 
     async def spotify_loop(self):
         async with aiohttp.ClientSession() as session:
@@ -215,6 +199,30 @@ class Bot(commands.Bot):
                 await asyncio.sleep(POLL_SECONDS)
 
 
+# --- Token Validation ---
+def validate_token(token: str):
+    if not token:
+        print("❌ No token provided")
+        return
+    plain = token[6:] if token.startswith("oauth:") else token
+    url = "https://id.twitch.tv/oauth2/validate"
+    headers = {"Authorization": f"OAuth {plain}"}
+    try:
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            print(f"❌ Token validate failed: {r.status_code} {r.text}")
+            return
+        data = r.json()
+        print("=== Token Validation ===")
+        print(f"Client ID: {data.get('client_id')}")
+        print(f"User ID:   {data.get('user_id')}")
+        print(f"Login:     {data.get('login')}")
+        print(f"Scopes:    {data.get('scopes')}")
+        print("========================")
+    except Exception as e:
+        print(f"❌ Token validate exception: {e}")
+
+
 # --- Run bot ---
 if __name__ == "__main__":
     print("=== Environment Debug ===")
@@ -230,6 +238,9 @@ if __name__ == "__main__":
     print(f"SPOTIFY_CLIENT_SECRET present? {'yes' if SPOTIFY_CLIENT_SECRET else 'no'}")
     print(f"SPOTIFY_REFRESH_TOKEN present? {'yes' if SPOTIFY_REFRESH_TOKEN else 'no'}")
     print("=========================")
+
+    # Validate token scopes before launching
+    validate_token(TOKEN)
 
     if not TOKEN or not TOKEN.startswith("oauth:"):
         print("❌ Missing or invalid Twitch user token (must start with 'oauth:')")
