@@ -88,7 +88,7 @@ class Bot(commands.Bot):
         super().__init__(
             token=TOKEN,
             prefix="!",
-            initial_channels=[CHANNEL],   # IRC join so bot shows in viewer list
+            initial_channels=[CHANNEL],   # IRC join (viewer list)
             client_id=CLIENT_ID,
             client_secret=CLIENT_SECRET,
             bot_id=BOT_ID,
@@ -106,13 +106,8 @@ class Bot(commands.Bot):
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
-        # Ensure IRC join (viewer list)
-        try:
-            await self.join_channels([CHANNEL])
-            print(f"[DEBUG] Forced IRC join to {CHANNEL}")
-        except Exception as e:
-            print(f"[DEBUG] IRC join error: {e}")
-
+        # In TwitchIO v3, initial_channels is enough; no join_channels() exists.
+        print(f"[DEBUG] Waiting for IRC JOIN to #{CHANNEL} via initial_channels...")
         asyncio.create_task(self.bootstrap_helix_and_run())
 
     async def bootstrap_helix_and_run(self):
@@ -154,10 +149,7 @@ class Bot(commands.Bot):
             return j["data"][0]["id"]
 
     async def _helix_announce(self, session: aiohttp.ClientSession, text: str, color: str = "primary") -> bool:
-        """
-        Send a Twitch announcement (colored highlight).
-        Requires bot to be moderator and token with moderator:manage:announcements.
-        """
+        """Send a Twitch announcement (colored highlight)."""
         if not (self._broadcaster_id and BOT_ID and self._user_token_plain and CLIENT_ID):
             return False
 
@@ -186,12 +178,13 @@ class Bot(commands.Bot):
             self._irc_channel = channel
             print(f"[DEBUG] Bot joined IRC channel: {channel.name}")
             try:
-                await channel.send("👋 (IRC) StimoBot is here!")
+                # IRC hello message
+                await channel.send("👋 StimoBot has joined the chat via IRC!")
             except Exception as e:
                 print(f"[Startup Error] IRC hello failed: {e}")
 
     async def event_message(self, message):
-        """Fallback: cache IRC channel from first message if join event missed."""
+        """Fallback: cache IRC channel from the first message if join event is missed."""
         if self._irc_channel is None:
             self._irc_channel = message.channel
             print(f"[DEBUG] Cached IRC channel from message: {self._irc_channel.name}")
