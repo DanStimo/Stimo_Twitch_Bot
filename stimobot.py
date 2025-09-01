@@ -188,7 +188,7 @@ class Bot(commands.Bot):
                                 continue
 
                         self._last_track_id = track["id"]
-                        msg = f"🎶 Now playing: {track['title']} — {track['artists']}"
+                        msg = f"🎶 msg = f"🎶 𝐍𝐨𝐰 𝐏𝐥𝐚𝐲𝐢𝐧𝐠: {track['title']} — {track['artists']}"
                         print(f"[DEBUG] Sending announcement: {msg}")
                         await self._helix_announce(session, msg, "purple")
                     else:
