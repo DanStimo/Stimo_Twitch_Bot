@@ -81,26 +81,35 @@ class Bot(commands.Bot):
         super().__init__(
             token=TOKEN,
             prefix="!",
-            initial_channels=[CHANNEL],   # IRC join; we may still send via Helix
+            initial_channels=[CHANNEL],   # joins IRC channel
             client_id=CLIENT_ID,
             client_secret=CLIENT_SECRET,
             bot_id=BOT_ID,
         )
         self.spotify = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN)
         self._last_track_id = None
+        self._irc_channel = None  # will hold IRC channel object once joined
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
+        # Force join IRC so we appear in viewer list
         try:
-            chan = self.get_channel(CHANNEL)  # works in v3 with initial_channels
-            if chan:
-                await chan.send("👋 StimoBot is here!")
-            else:
-                print("[DEBUG] get_channel returned None")
+            await self.join_channels([CHANNEL])
+            print(f"[DEBUG] joined IRC channel: {CHANNEL}")
         except Exception as e:
-            print(f"[Startup Error] Could not send startup message: {e}")
-    
+            print(f"[DEBUG] join_channels error: {e}")
+        # Start Spotify loop
         asyncio.create_task(self.spotify_loop())
+
+    async def event_join(self, channel, user):
+        # Cache IRC channel once *this bot* joins
+        if user.name.lower() == self.nick.lower():
+            self._irc_channel = channel
+            print(f"[DEBUG] Cached IRC channel: {channel.name}")
+            try:
+                await channel.send("👋 StimoBot is here!")
+            except Exception as e:
+                print(f"[Startup Error] Could not send startup message: {e}")
 
     async def spotify_loop(self):
         async with aiohttp.ClientSession() as session:
@@ -111,7 +120,10 @@ class Bot(commands.Bot):
                         self._last_track_id = track["id"]
                         msg = f"🎶 Now playing: {track['title']} — {track['artists']} {track['url']}"
                         print(f"[DEBUG] Sending message: {msg}")
-                        # TODO: replace with correct channel send logic
+                        if self._irc_channel:
+                            await self._irc_channel.send(msg)
+                        else:
+                            print("[DEBUG] No IRC channel cached yet")
                     else:
                         print("[DEBUG] No new track or nothing playing")
                 except Exception as e:
