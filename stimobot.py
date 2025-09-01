@@ -2,14 +2,13 @@ import os
 import asyncio
 import time
 import aiohttp
-import requests
 from twitchio.ext import commands
 
 # --- Railway Env Vars ---
-TOKEN               = os.getenv("TOKEN")               # Twitch user token for chat (must start with oauth:)
+TOKEN               = os.getenv("TOKEN")               # Twitch user token for IRC (must start with oauth:)
 CLIENT_ID           = os.getenv("CLIENT_ID")
 CLIENT_SECRET       = os.getenv("CLIENT_SECRET")
-BOT_ID              = os.getenv("BOT_ID")              # your bot account's numeric user ID (string ok)
+BOT_ID              = os.getenv("BOT_ID")              # your bot account's numeric user ID
 CHANNEL             = (os.getenv("CHANNEL") or "stimo").lower()
 
 SPOTIFY_CLIENT_ID     = os.getenv("SPOTIFY_CLIENT_ID")
@@ -89,7 +88,7 @@ class Bot(commands.Bot):
         super().__init__(
             token=TOKEN,
             prefix="!",
-            initial_channels=[CHANNEL],   # attempt IRC join (viewer list)
+            initial_channels=[CHANNEL],   # IRC join
             client_id=CLIENT_ID,
             client_secret=CLIENT_SECRET,
             bot_id=BOT_ID,
@@ -107,6 +106,7 @@ class Bot(commands.Bot):
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
+        print(f"[DEBUG] Waiting for IRC JOIN to #{CHANNEL} via initial_channels...")
         asyncio.create_task(self.bootstrap_helix_and_run())
 
     async def bootstrap_helix_and_run(self):
@@ -146,6 +146,22 @@ class Bot(commands.Bot):
             if r.status != 200 or "data" not in j or not j["data"]:
                 raise RuntimeError(f"Helix users lookup failed: {r.status} {j}")
             return j["data"][0]["id"]
+
+    async def event_join(self, channel, user):
+        # When bot itself joins IRC
+        if getattr(user, "name", "").lower() == getattr(self.user, "name", "").lower():
+            self._irc_channel = channel
+            print(f"[DEBUG] Bot joined IRC channel: {channel.name}")
+            try:
+                await channel.send("👋 (IRC) StimoBot is here!")
+            except Exception as e:
+                print(f"[Startup Error] IRC hello failed: {e}")
+
+    async def event_message(self, message):
+        if self._irc_channel is None:
+            self._irc_channel = message.channel
+            print(f"[DEBUG] Cached IRC channel from message: {self._irc_channel.name}")
+        await self.handle_commands(message)
 
     async def _helix_announce(self, session: aiohttp.ClientSession, text: str, color: str = "primary") -> bool:
         """
@@ -200,7 +216,7 @@ class Bot(commands.Bot):
 
 
 # --- Token Validation ---
-def validate_token(token: str):
+async def validate_token(token: str):
     if not token:
         print("❌ No token provided")
         return
@@ -208,17 +224,18 @@ def validate_token(token: str):
     url = "https://id.twitch.tv/oauth2/validate"
     headers = {"Authorization": f"OAuth {plain}"}
     try:
-        r = requests.get(url, headers=headers)
-        if r.status_code != 200:
-            print(f"❌ Token validate failed: {r.status_code} {r.text}")
-            return
-        data = r.json()
-        print("=== Token Validation ===")
-        print(f"Client ID: {data.get('client_id')}")
-        print(f"User ID:   {data.get('user_id')}")
-        print(f"Login:     {data.get('login')}")
-        print(f"Scopes:    {data.get('scopes')}")
-        print("========================")
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as r:
+                if r.status != 200:
+                    print(f"❌ Token validate failed: {r.status} {await r.text()}")
+                    return
+                data = await r.json()
+                print("=== Token Validation ===")
+                print(f"Client ID: {data.get('client_id')}")
+                print(f"User ID:   {data.get('user_id')}")
+                print(f"Login:     {data.get('login')}")
+                print(f"Scopes:    {data.get('scopes')}")
+                print("========================")
     except Exception as e:
         print(f"❌ Token validate exception: {e}")
 
@@ -239,8 +256,7 @@ if __name__ == "__main__":
     print(f"SPOTIFY_REFRESH_TOKEN present? {'yes' if SPOTIFY_REFRESH_TOKEN else 'no'}")
     print("=========================")
 
-    # Validate token scopes before launching
-    validate_token(TOKEN)
+    asyncio.run(validate_token(TOKEN))
 
     if not TOKEN or not TOKEN.startswith("oauth:"):
         print("❌ Missing or invalid Twitch user token (must start with 'oauth:')")
