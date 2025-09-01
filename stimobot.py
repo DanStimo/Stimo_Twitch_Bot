@@ -112,16 +112,7 @@ class Bot(commands.Bot):
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
         print(f"[DEBUG] Waiting for IRC JOIN to #{CHANNEL} via initial_channels...")
-
-        # Try sending a hello immediately if TwitchIO already cached the channel
-        chan = self.get_channel(CHANNEL)
-        if chan:
-            try:
-                await chan.send("👋 IRC hello from StimoBot")
-                print("[DEBUG] Sent IRC hello to", chan.name)
-            except Exception as e:
-                print("[DEBUG] IRC send-on-ready failed:", e)
-
+        # No get_channel / connected_channels in v3. We'll rely on event_join/event_message.
         asyncio.create_task(self.bootstrap_helix_and_run())
 
     async def bootstrap_helix_and_run(self):
