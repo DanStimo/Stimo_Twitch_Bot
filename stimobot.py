@@ -88,7 +88,7 @@ class Bot(commands.Bot):
         super().__init__(
             token=TOKEN,
             prefix="!",
-            initial_channels=[CHANNEL],   # attempt IRC join (viewer list)
+            initial_channels=[CHANNEL],   # IRC join so bot shows in viewer list
             client_id=CLIENT_ID,
             client_secret=CLIENT_SECRET,
             bot_id=BOT_ID,
@@ -106,6 +106,13 @@ class Bot(commands.Bot):
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
+        # Ensure IRC join (viewer list)
+        try:
+            await self.join_channels([CHANNEL])
+            print(f"[DEBUG] Forced IRC join to {CHANNEL}")
+        except Exception as e:
+            print(f"[DEBUG] IRC join error: {e}")
+
         asyncio.create_task(self.bootstrap_helix_and_run())
 
     async def bootstrap_helix_and_run(self):
@@ -172,6 +179,23 @@ class Bot(commands.Bot):
             body = await r.text()
             print(f"[Helix Announce Error] {r.status} {body}")
             return False
+
+    async def event_join(self, channel, user):
+        """Cache IRC channel when this bot joins (viewer list presence)."""
+        if getattr(user, "name", "").lower() == getattr(self.user, "name", "").lower():
+            self._irc_channel = channel
+            print(f"[DEBUG] Bot joined IRC channel: {channel.name}")
+            try:
+                await channel.send("👋 (IRC) StimoBot is here!")
+            except Exception as e:
+                print(f"[Startup Error] IRC hello failed: {e}")
+
+    async def event_message(self, message):
+        """Fallback: cache IRC channel from first message if join event missed."""
+        if self._irc_channel is None:
+            self._irc_channel = message.channel
+            print(f"[DEBUG] Cached IRC channel from message: {self._irc_channel.name}")
+        await self.handle_commands(message)
 
     async def spotify_loop(self):
         async with aiohttp.ClientSession() as session:
