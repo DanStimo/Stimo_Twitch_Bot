@@ -93,11 +93,6 @@ class Bot(commands.Bot):
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
         # Force join IRC so we appear in viewer list
-        try:
-            await self.join_channels([CHANNEL])
-            print(f"[DEBUG] joined IRC channel: {CHANNEL}")
-        except Exception as e:
-            print(f"[DEBUG] join_channels error: {e}")
         # Start Spotify loop
         asyncio.create_task(self.spotify_loop())
 
