@@ -17,135 +17,16 @@ SPOTIFY_REFRESH_TOKEN = os.getenv("SPOTIFY_REFRESH_TOKEN")
 
 POLL_SECONDS = int(os.getenv("SPOTIFY_POLL_SECONDS", "5"))
 
+# --- Pro Clubs Club ID / Platform ---
+CLUB_ID   = "167054"        # your Pro Clubs team ID
+PLATFORM  = "common-gen5"   # PS5 platform string for EA API
+
+
 def get_plain_user_token():
     """Return the plain bearer token (no 'oauth:' prefix)."""
     t = os.getenv("TOKEN") or ""
     return t[6:] if t.startswith("oauth:") else t
 
-# --- Async token validation to obtain login (nick) & scopes ---
-async def validate_token(token: str):
-    if not token:
-        print("❌ No token provided")
-        return None
-    plain = token[6:] if token.startswith("oauth:") else token
-    url = "https://id.twitch.tv/oauth2/validate"
-    headers = {"Authorization": f"OAuth {plain}"}
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers) as r:
-                if r.status != 200:
-                    print(f"❌ Token validate failed: {r.status} {await r.text()}")
-                    return None
-                data = await r.json()
-                print("=== Token Validation ===")
-                print(f"Client ID: {data.get('client_id')}")
-                print(f"User ID:   {data.get('user_id')}")
-                print(f"Login:     {data.get('login')}")
-                print(f"Scopes:    {data.get('scopes')}")
-                print("========================")
-                return {
-                    "client_id": data.get("client_id"),
-                    "user_id": data.get("user_id"),
-                    "login": data.get("login"),
-                    "scopes": data.get("scopes"),
-                }
-    except Exception as e:
-        print(f"❌ Token validate exception: {e}")
-        return None
-
-# --- Minimal IRC-over-WebSocket client to guarantee viewer-list presence ---
-class SimpleIRCClient:
-    def __init__(self, token_oauth: str, login: str, channel: str):
-        """
-        token_oauth: the full token string including 'oauth:' prefix
-        login: twitch username for the token (nick)
-        channel: channel to join without '#'
-        """
-        self.token_oauth = token_oauth
-        self.login = login
-        self.channel = channel
-        self.ws = None
-        self._running = False
-
-    async def connect_and_run(self):
-        """
-        Persistent loop: connect, join, respond to PING, log messages, handle !ping.
-        Reconnects with backoff if disconnected.
-        """
-        backoff = 1
-        self._running = True
-        while self._running:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    print("[IRC-WS] Connecting to wss://irc-ws.chat.twitch.tv:443 ...")
-                    async with session.ws_connect("wss://irc-ws.chat.twitch.tv:443") as ws:
-                        self.ws = ws
-                        # Request capabilities (membership to appear in viewer list, tags, commands)
-                        await self._send_raw("CAP REQ :twitch.tv/membership twitch.tv/tags twitch.tv/commands")
-                        await self._send_raw(f"PASS {self.token_oauth}")
-                        await self._send_raw(f"NICK {self.login}")
-                        await self._send_raw(f"JOIN #{self.channel}")
-                        print(f"[IRC-WS] Joined #{self.channel} as {self.login}")
-
-                        # Optional hello message via IRC
-                        await self.privmsg(f"👋 (IRC-WS) {self.login} connected.")
-
-                        backoff = 1  # reset backoff on success
-
-                        async for msg in ws:
-                            if msg.type == aiohttp.WSMsgType.TEXT:
-                                line = msg.data.rstrip("\r\n")
-                                print(f"[IRC RAW] {line}")
-
-                                # Respond to PING to keep the connection alive
-                                if line.startswith("PING "):
-                                    payload = line.split(" ", 1)[1]
-                                    await self._send_raw(f"PONG {payload}")
-                                    continue
-
-                                # Simple PRIVMSG parsing for !ping
-                                # Example: :user!user@user.tmi.twitch.tv PRIVMSG #channel :message text
-                                try:
-                                    if " PRIVMSG #" in line:
-                                        # Extract channel and message
-                                        # split once on " PRIVMSG #"
-                                        prefix, rest = line.split(" PRIVMSG #", 1)
-                                        chan, msgtext = rest.split(" :", 1)
-                                        chan = chan.split(" ", 1)[0]
-                                        # Extract author from prefix: starts with ":nick!"
-                                        author = prefix.split("!", 1)[0][1:]
-                                        print(f"[IRC MSG] #{chan} <{author}> {msgtext}")
-
-                                        if msgtext.strip().lower() == "!ping":
-                                            await self.privmsg("pong")
-                                except Exception as e:
-                                    print(f"[IRC-WS Parse Error] {e}")
-
-                            elif msg.type == aiohttp.WSMsgType.ERROR:
-                                print(f"[IRC-WS] WebSocket error: {msg.data}")
-                                break
-                            elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSE):
-                                print("[IRC-WS] WebSocket closed by server.")
-                                break
-
-            except Exception as e:
-                print(f"[IRC-WS] Connection error: {e}")
-
-            # Reconnect with exponential backoff
-            if self._running:
-                print(f"[IRC-WS] Reconnecting in {backoff}s ...")
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, 60)
-
-    async def _send_raw(self, line: str):
-        if self.ws is not None:
-            await self.ws.send_str(line + "\r\n")
-
-    async def privmsg(self, text: str):
-        await self._send_raw(f"PRIVMSG #{self.channel} :{text}")
-
-    def stop(self):
-        self._running = False
 
 # --- Spotify Client ---
 class SpotifyClient:
@@ -204,13 +85,14 @@ class SpotifyClient:
                 "progress_ms": j.get("progress_ms", 0),
             }
 
-# --- Helix + Spotify Bot (kept as-is for announcements) ---
+
+# --- Twitch Bot ---
 class Bot(commands.Bot):
     def __init__(self):
         super().__init__(
             token=TOKEN,
             prefix="!",
-            initial_channels=[CHANNEL],   # not relied upon anymore for presence
+            initial_channels=[CHANNEL],   # IRC join
             client_id=CLIENT_ID,
             client_secret=CLIENT_SECRET,
             bot_id=BOT_ID,
@@ -218,27 +100,78 @@ class Bot(commands.Bot):
         self.spotify = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN)
         self._last_track_id = None
 
+        self._irc_channel = None
         self._broadcaster_id = None
         self._user_token_plain = get_plain_user_token()
         self._helix_ready = False
 
-        # Our added raw IRC WS client
-        self._irc_ws_client: SimpleIRCClient | None = None
-
+    # --- EVENTS ---
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
+        print(f"[DEBUG] Waiting for IRC JOIN to #{CHANNEL} via initial_channels...")
         asyncio.create_task(self.bootstrap_helix_and_run())
 
+    async def event_join(self, channel, user):
+        if getattr(user, "name", "").lower() == getattr(self.user, "name", "").lower():
+            self._irc_channel = channel
+            print(f"[DEBUG] Bot joined IRC channel: {channel.name}")
+            try:
+                await channel.send("👋 (IRC) StimoBot is here!")
+            except Exception as e:
+                print(f"[Startup Error] IRC hello failed: {e}")
+
+    async def event_message(self, message):
+        if self._irc_channel is None:
+            self._irc_channel = message.channel
+            print(f"[DEBUG] Cached IRC channel from message: {self._irc_channel.name}")
+        await self.handle_commands(message)
+
+    # --- COMMANDS ---
+    @commands.command(name="ping")
+    async def ping(self, ctx: commands.Context):
+        await ctx.send("pong")
+
+    @commands.command(name="versus")
+    async def versus(self, ctx: commands.Context):
+        """Fetch last opponent and display W/D/L stats."""
+        async with aiohttp.ClientSession() as session:
+            try:
+                url = f"https://proclubs.ea.com/api/fifa/clubs/matches?clubIds={CLUB_ID}&platform={PLATFORM}&matchType=gameType13&maxResult=1"
+                async with session.get(url) as r:
+                    if r.status != 200:
+                        await ctx.send(f"❌ EA API error: {r.status}")
+                        return
+                    matches = await r.json()
+                    if not matches:
+                        await ctx.send("❌ No matches found.")
+                        return
+                    match = matches[0]
+
+                    home_id = str(match["home"]["clubId"])
+                    away_id = str(match["away"]["clubId"])
+                    opponent = match["home"]["details"]["name"] if home_id != CLUB_ID else match["away"]["details"]["name"]
+
+                    # fetch overall stats
+                    stats_url = f"https://proclubs.ea.com/api/fifa/clubs/overallStats?clubIds={away_id if home_id == CLUB_ID else home_id}&platform={PLATFORM}"
+                    async with session.get(stats_url) as sr:
+                        stats = await sr.json()
+                        if stats and "aggregate" in stats:
+                            rec = stats["aggregate"]["overallrecord"]
+                            await ctx.send(f"📊 Opponent {opponent} — {rec['wins']}W-{rec['losses']}L-{rec['ties']}D")
+                        else:
+                            await ctx.send(f"📊 Opponent {opponent} — no stats available")
+            except Exception as e:
+                await ctx.send(f"❌ Error fetching data: {e}")
+
+    # --- HELIX / SPOTIFY ---
     async def bootstrap_helix_and_run(self):
         async with aiohttp.ClientSession() as session:
-            # Resolve broadcaster id via Helix
             try:
                 self._broadcaster_id = await self._resolve_broadcaster_id(session, CHANNEL)
                 print(f"[DEBUG] Resolved broadcaster_id for {CHANNEL}: {self._broadcaster_id}")
             except Exception as e:
                 print(f"[Startup Warn] Could not resolve broadcaster id: {e}")
 
-            # Startup announcement via Helix
             try:
                 ok = await self._helix_announce(session, "✅ StimoBot is online and watching Spotify 🎶", "green")
                 self._helix_ready = ok
@@ -249,22 +182,6 @@ class Bot(commands.Bot):
             except Exception as e:
                 print(f"[Startup Warn] Helix announcement error: {e}")
 
-        # Start our own IRC-WS client to guarantee viewer-list presence
-        try:
-            # Validate token (again) to get the login for NICK
-            tv = await validate_token(TOKEN)
-            nick = tv.get("login") if tv else None
-            if not nick:
-                # Fallback: try to guess from env/username
-                nick = "stimobot"
-                print("[IRC-WS] Warning: could not determine login from token; defaulting to 'stimobot'.")
-
-            self._irc_ws_client = SimpleIRCClient(token_oauth=TOKEN, login=nick, channel=CHANNEL)
-            asyncio.create_task(self._irc_ws_client.connect_and_run())
-        except Exception as e:
-            print(f"[IRC-WS] Failed to start IRC WS client: {e}")
-
-        # Start Spotify loop
         asyncio.create_task(self.spotify_loop())
 
     async def _resolve_broadcaster_id(self, session: aiohttp.ClientSession, login_name: str) -> str:
@@ -272,8 +189,6 @@ class Bot(commands.Bot):
         data = {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "grant_type": "client_credentials"}
         async with session.post(token_url, data=data) as r:
             tok = await r.json()
-            if "access_token" not in tok:
-                raise RuntimeError(f"Failed to get app token: {tok}")
             app_token = tok["access_token"]
             print("[DEBUG] Obtained Twitch app access token")
 
@@ -281,12 +196,9 @@ class Bot(commands.Bot):
         headers = {"Client-Id": CLIENT_ID, "Authorization": f"Bearer {app_token}"}
         async with session.get(users_url, headers=headers) as r:
             j = await r.json()
-            if r.status != 200 or "data" not in j or not j["data"]:
-                raise RuntimeError(f"Helix users lookup failed: {r.status} {j}")
             return j["data"][0]["id"]
 
     async def _helix_announce(self, session: aiohttp.ClientSession, text: str, color: str = "primary") -> bool:
-        """Send a Twitch announcement (colored highlight)."""
         if not (self._broadcaster_id and BOT_ID and self._user_token_plain and CLIENT_ID):
             return False
 
@@ -303,11 +215,7 @@ class Bot(commands.Bot):
             "color": color
         }
         async with session.post(url, headers=headers, json=payload) as r:
-            if r.status in (200, 201, 204):
-                return True
-            body = await r.text()
-            print(f"[Helix Announce Error] {r.status} {body}")
-            return False
+            return r.status in (200, 201, 204)
 
     async def spotify_loop(self):
         async with aiohttp.ClientSession() as session:
@@ -319,23 +227,34 @@ class Bot(commands.Bot):
                             await asyncio.sleep(1.5)
                             track2 = await self.spotify.get_current_track(session)
                             if not track2 or track2["id"] != track["id"]:
-                                print("[DEBUG] Debounce: track changed during grace; skipping")
                                 await asyncio.sleep(POLL_SECONDS)
                                 continue
 
                         self._last_track_id = track["id"]
                         msg = f"🎶 𝐍𝐨𝐰 𝐏𝐥𝐚𝐲𝐢𝐧𝐠: {track['title']} — {track['artists']}"
                         print(f"[DEBUG] Sending announcement: {msg}")
-                        # Send as Helix announcement
                         await self._helix_announce(session, msg, "purple")
-                        # Optional: also echo via IRC WS client (uncomment if desired)
-                        # if self._irc_ws_client:
-                        #     await self._irc_ws_client.privmsg(msg)
-                    else:
-                        print("[DEBUG] No new track or nothing playing")
                 except Exception as e:
                     print(f"[Spotify Error] {e}")
                 await asyncio.sleep(POLL_SECONDS)
+
+
+# --- Token Validation ---
+async def validate_token(token: str):
+    if not token:
+        return
+    plain = token[6:] if token.startswith("oauth:") else token
+    url = "https://id.twitch.tv/oauth2/validate"
+    headers = {"Authorization": f"OAuth {plain}"}
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as r:
+            data = await r.json()
+            print("=== Token Validation ===")
+            print(f"Client ID: {data.get('client_id')}")
+            print(f"User ID:   {data.get('user_id')}")
+            print(f"Login:     {data.get('login')}")
+            print(f"Scopes:    {data.get('scopes')}")
+            print("========================")
 
 
 # --- Run bot ---
@@ -349,16 +268,12 @@ if __name__ == "__main__":
     print(f"CLIENT_SECRET present? {'yes' if CLIENT_SECRET else 'no'}")
     print(f"BOT_ID: {BOT_ID}")
     print(f"CHANNEL: {CHANNEL}")
-    print(f"SPOTIFY_CLIENT_ID present? {'yes' if SPOTIFY_CLIENT_ID else 'no'}")
-    print(f"SPOTIFY_CLIENT_SECRET present? {'yes' if SPOTIFY_CLIENT_SECRET else 'no'}")
-    print(f"SPOTIFY_REFRESH_TOKEN present? {'yes' if SPOTIFY_REFRESH_TOKEN else 'no'}")
     print("=========================")
 
-    # Validate token once at startup (prints scopes & login)
     asyncio.run(validate_token(TOKEN))
 
     if not TOKEN or not TOKEN.startswith("oauth:"):
-        print("❌ Missing or invalid Twitch user token (must start with 'oauth:')")
+        print("❌ Missing or invalid Twitch user token")
     else:
         print("[DEBUG] Running Bot() now...")
         Bot().run()
