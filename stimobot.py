@@ -146,7 +146,7 @@ class Bot(commands.Bot):
                 raise RuntimeError(f"Helix users lookup failed: {r.status} {j}")
             return j["data"][0]["id"]
 
-    async def _helix_announce(self, session: aiohttp.ClientSession, text: str, color: str = "purple") -> bool:
+    async def _helix_announce(self, session: aiohttp.ClientSession, text: str, color: str = "primary") -> bool:
         """
         Send a Twitch announcement (colored highlight).
         Requires bot to be moderator and token with moderator:manage:announcements.
@@ -190,7 +190,7 @@ class Bot(commands.Bot):
                         self._last_track_id = track["id"]
                         msg = f"🎶 Now playing: {track['title']} — {track['artists']}"
                         print(f"[DEBUG] Sending announcement: {msg}")
-                        await self._helix_announce(session, msg, "primary")
+                        await self._helix_announce(session, msg, "purple")
                     else:
                         print("[DEBUG] No new track or nothing playing")
                 except Exception as e:
