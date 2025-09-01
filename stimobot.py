@@ -104,6 +104,10 @@ class Bot(commands.Bot):
             except Exception as e:
                 print(f"[Startup Error] Could not send startup message: {e}")
 
+    async def event_raw_data(self, data):
+        # This logs raw IRC lines like JOIN/PART/PRIVMSG, useful for debugging
+        print(f"[IRC RAW] {data}")
+
     async def spotify_loop(self):
         async with aiohttp.ClientSession() as session:
             while True:
