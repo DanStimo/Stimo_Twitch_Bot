@@ -117,7 +117,7 @@ class Bot(commands.Bot):
             if creator and self._broadcaster_id:
                 self._broadcaster_user = creator(int(self._broadcaster_id))
                 # Try a Helix startup message (requires user:write:chat on TOKEN)
-                await self._broadcaster_user.send_message(self.user, "✅ StimoBot is online and watching Spotify 🎶")
+                await self._broadcaster_user.send_message(self.nick, "✅ StimoBot is online and watching Spotify 🎶")
                 self._helix_ready = True
                 print("[DEBUG] Helix startup message sent")
             else:
@@ -168,7 +168,7 @@ class Bot(commands.Bot):
     # Prefer Helix if ready
         if self._helix_ready and self._broadcaster_user is not None:
             try:
-                await self._broadcaster_user.send_message(self.user, text)
+                await self._broadcaster_user.send_message(self.nick, text)
                 return
             except Exception as e:
                 print(f"[Send Warn] Helix send failed mid-run; falling back to IRC: {e}")
