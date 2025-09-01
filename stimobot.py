@@ -81,7 +81,7 @@ class Bot(commands.Bot):
         super().__init__(
             token=TOKEN,
             prefix="!",
-            initial_channels=[CHANNEL],   # joins IRC channel
+            initial_channels=[CHANNEL],   # joins IRC channel automatically
             client_id=CLIENT_ID,
             client_secret=CLIENT_SECRET,
             bot_id=BOT_ID,
@@ -92,15 +92,13 @@ class Bot(commands.Bot):
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
-        # Force join IRC so we appear in viewer list
-        # Start Spotify loop
         asyncio.create_task(self.spotify_loop())
 
     async def event_join(self, channel, user):
         # Cache IRC channel once *this bot* joins
         if user.name.lower() == self.nick.lower():
             self._irc_channel = channel
-            print(f"[DEBUG] Cached IRC channel: {channel.name}")
+            print(f"[DEBUG] Bot joined channel: {channel.name}")
             try:
                 await channel.send("👋 StimoBot is here!")
             except Exception as e:
