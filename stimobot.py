@@ -227,7 +227,7 @@ class Bot(commands.Bot):
                                 continue
 
                         self._last_track_id = track["id"]
-                        msg = f"🎶 Now playing: {track['title']} — {track['artists']} {track['url']}"
+                        msg = f"🎶 Now playing: {track['title']} — {track['artists']}"
                         print(f"[DEBUG] Sending message: {msg}")
                         await self._send_chat(msg)
                     else:
