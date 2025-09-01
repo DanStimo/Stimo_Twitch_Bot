@@ -113,11 +113,12 @@ class Bot(commands.Bot):
         print(f"✅ Connected as {self.user.name}")
         print(f"[DEBUG] Waiting for IRC JOIN to #{CHANNEL} via initial_channels...")
 
-        # Try sending a hello immediately if channel object exists
-        if self.connected_channels:
+        # Try sending a hello immediately if TwitchIO already cached the channel
+        chan = self.get_channel(CHANNEL)
+        if chan:
             try:
-                await self.connected_channels[0].send("👋 IRC hello from StimoBot")
-                print("[DEBUG] Sent IRC hello to", self.connected_channels[0].name)
+                await chan.send("👋 IRC hello from StimoBot")
+                print("[DEBUG] Sent IRC hello to", chan.name)
             except Exception as e:
                 print("[DEBUG] IRC send-on-ready failed:", e)
 
@@ -171,16 +172,25 @@ class Bot(commands.Bot):
                 print(f"[Startup Error] IRC hello failed: {e}")
 
     async def event_message(self, message):
+        # Log every incoming chat line (confirms IRC receive path)
+        try:
+            print(f"[IRC MSG] #{message.channel.name} <{message.author.name}> {message.content}")
+        except Exception:
+            pass
+
         if self._irc_channel is None:
             self._irc_channel = message.channel
             print(f"[DEBUG] Cached IRC channel from message: {self._irc_channel.name}")
+
         await self.handle_commands(message)
 
-    @commands.command()
-    async def ping(self, ctx):
-        await ctx.send("pong!")
+    @commands.command(name="ping")
+    async def ping(self, ctx: commands.Context):
+        print("[DEBUG] !ping received; replying with pong via IRC")
+        await ctx.send("pong")
 
     async def _helix_announce(self, session: aiohttp.ClientSession, text: str, color: str = "primary") -> bool:
+        """Send a Twitch announcement (colored highlight)."""
         if not (self._broadcaster_id and BOT_ID and self._user_token_plain and CLIENT_ID):
             return False
 
