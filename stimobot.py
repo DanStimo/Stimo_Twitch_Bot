@@ -104,11 +104,15 @@ class SimpleIRCClient:
                                     continue
 
                                 # Simple PRIVMSG parsing for !ping
+                                # Example: :user!user@user.tmi.twitch.tv PRIVMSG #channel :message text
                                 try:
                                     if " PRIVMSG #" in line:
+                                        # Extract channel and message
+                                        # split once on " PRIVMSG #"
                                         prefix, rest = line.split(" PRIVMSG #", 1)
                                         chan, msgtext = rest.split(" :", 1)
                                         chan = chan.split(" ", 1)[0]
+                                        # Extract author from prefix: starts with ":nick!"
                                         author = prefix.split("!", 1)[0][1:]
                                         print(f"[IRC MSG] #{chan} <{author}> {msgtext}")
 
@@ -200,7 +204,7 @@ class SpotifyClient:
                 "progress_ms": j.get("progress_ms", 0),
             }
 
-# --- Helix + Spotify Bot ---
+# --- Helix + Spotify Bot (kept as-is for announcements) ---
 class Bot(commands.Bot):
     def __init__(self):
         super().__init__(
@@ -218,71 +222,12 @@ class Bot(commands.Bot):
         self._user_token_plain = get_plain_user_token()
         self._helix_ready = False
 
-        # Raw IRC WS client
+        # Our added raw IRC WS client
         self._irc_ws_client: SimpleIRCClient | None = None
-
-        # App token cache for Send Chat Message (badge)
-        self._app_token: str | None = None
-        self._app_token_exp: float = 0.0
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
         asyncio.create_task(self.bootstrap_helix_and_run())
-
-    # ---------- Chat Bot badge helpers ----------
-    async def _get_app_token(self, session: aiohttp.ClientSession) -> str:
-        """Get & cache an App Access Token for Helix 'Send Chat Message'."""
-        now = time.time()
-        if self._app_token and now < (self._app_token_exp - 30):
-            return self._app_token
-
-        url = "https://id.twitch.tv/oauth2/token"
-        data = {
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-            "grant_type": "client_credentials",
-        }
-        async with session.post(url, data=data) as r:
-            j = await r.json()
-            if "access_token" not in j:
-                raise RuntimeError(f"App token error: {r.status} {j}")
-            self._app_token = j["access_token"]
-            self._app_token_exp = now + j.get("expires_in", 3600)
-            print("[DEBUG] Obtained App Access Token for Send Chat Message")
-            return self._app_token
-
-    async def _send_chat_with_badge(self, session: aiohttp.ClientSession, text: str) -> bool:
-        """
-        Send a normal chat line via POST /helix/chat/messages using an App Access Token.
-        For the Chat Bot badge to appear:
-          - The bot account must have granted 'user:bot' to your app (one-time).
-          - AND the bot is moderator in the channel OR broadcaster granted 'channel:bot'.
-        """
-        if not self._broadcaster_id or not BOT_ID:
-            return False
-
-        token = await self._get_app_token(session)
-        url = "https://api.twitch.tv/helix/chat/messages"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Client-Id": CLIENT_ID,
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "broadcaster_id": str(self._broadcaster_id),  # channel owner (stimo)
-            "sender_id": str(BOT_ID),                     # bot user id (stimobot)
-            "message": text,
-        }
-        async with session.post(url, headers=headers, json=payload) as r:
-            ok = r.status in (200, 201, 202, 204)
-            if not ok:
-                try:
-                    body = await r.json()
-                except Exception:
-                    body = await r.text()
-                print(f"[Send Chat Error] {r.status} {body}")
-            return ok
-    # --------------------------------------------
 
     async def bootstrap_helix_and_run(self):
         async with aiohttp.ClientSession() as session:
@@ -293,7 +238,7 @@ class Bot(commands.Bot):
             except Exception as e:
                 print(f"[Startup Warn] Could not resolve broadcaster id: {e}")
 
-            # Startup announcement via Helix (kept as announcement)
+            # Startup announcement via Helix
             try:
                 ok = await self._helix_announce(session, "✅ StimoBot is online and watching Spotify 🎶", "green")
                 self._helix_ready = ok
@@ -304,10 +249,16 @@ class Bot(commands.Bot):
             except Exception as e:
                 print(f"[Startup Warn] Helix announcement error: {e}")
 
-        # Start our IRC-WS client to guarantee viewer-list presence
+        # Start our own IRC-WS client to guarantee viewer-list presence
         try:
+            # Validate token (again) to get the login for NICK
             tv = await validate_token(TOKEN)
-            nick = tv.get("login") if tv else "stimobot"
+            nick = tv.get("login") if tv else None
+            if not nick:
+                # Fallback: try to guess from env/username
+                nick = "stimobot"
+                print("[IRC-WS] Warning: could not determine login from token; defaulting to 'stimobot'.")
+
             self._irc_ws_client = SimpleIRCClient(token_oauth=TOKEN, login=nick, channel=CHANNEL)
             asyncio.create_task(self._irc_ws_client.connect_and_run())
         except Exception as e:
@@ -374,12 +325,12 @@ class Bot(commands.Bot):
 
                         self._last_track_id = track["id"]
                         msg = f"🎶 𝐍𝐨𝐰 𝐏𝐥𝐚𝐲𝐢𝐧𝐠: {track['title']} — {track['artists']}"
-                        print(f"[DEBUG] Sending badged chat: {msg}")
-                        # Send as normal chat with Chat Bot badge
-                        await self._send_chat_with_badge(session, msg)
-
-                        # If you ALSO want the purple announcement, uncomment:
-                        # await self._helix_announce(session, msg, "purple")
+                        print(f"[DEBUG] Sending announcement: {msg}")
+                        # Send as Helix announcement
+                        await self._helix_announce(session, msg, "purple")
+                        # Optional: also echo via IRC WS client (uncomment if desired)
+                        # if self._irc_ws_client:
+                        #     await self._irc_ws_client.privmsg(msg)
                     else:
                         print("[DEBUG] No new track or nothing playing")
                 except Exception as e:
