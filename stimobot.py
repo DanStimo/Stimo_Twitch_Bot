@@ -108,7 +108,6 @@ class SimpleIRCClient:
                                 try:
                                     if " PRIVMSG #" in line:
                                         # Extract channel and message
-                                        # split once on " PRIVMSG #"
                                         prefix, rest = line.split(" PRIVMSG #", 1)
                                         chan, msgtext = rest.split(" :", 1)
                                         chan = chan.split(" ", 1)[0]
@@ -225,6 +224,12 @@ class Bot(commands.Bot):
         # Our added raw IRC WS client
         self._irc_ws_client: SimpleIRCClient | None = None
 
+        # --- live gating helpers ---
+        self._app_token = None
+        self._app_token_exp = 0.0
+        self._live_status = None        # True/False
+        self._live_checked_at = 0.0     # epoch seconds
+
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
         asyncio.create_task(self.bootstrap_helix_and_run())
@@ -255,10 +260,8 @@ class Bot(commands.Bot):
             tv = await validate_token(TOKEN)
             nick = tv.get("login") if tv else None
             if not nick:
-                # Fallback: try to guess from env/username
                 nick = "stimobot"
                 print("[IRC-WS] Warning: could not determine login from token; defaulting to 'stimobot'.")
-
             self._irc_ws_client = SimpleIRCClient(token_oauth=TOKEN, login=nick, channel=CHANNEL)
             asyncio.create_task(self._irc_ws_client.connect_and_run())
         except Exception as e:
@@ -284,6 +287,49 @@ class Bot(commands.Bot):
             if r.status != 200 or "data" not in j or not j["data"]:
                 raise RuntimeError(f"Helix users lookup failed: {r.status} {j}")
             return j["data"][0]["id"]
+
+    async def _get_app_token(self, session: aiohttp.ClientSession) -> str:
+        """Get & cache an App Access Token for GET /streams live check."""
+        now = time.time()
+        if self._app_token and now < (self._app_token_exp - 30):
+            return self._app_token
+        url = "https://id.twitch.tv/oauth2/token"
+        data = {
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "grant_type": "client_credentials",
+        }
+        async with session.post(url, data=data) as r:
+            j = await r.json()
+            if "access_token" not in j:
+                raise RuntimeError(f"App token error: {r.status} {j}")
+            self._app_token = j["access_token"]
+            self._app_token_exp = now + j.get("expires_in", 3600)
+            print("[DEBUG] Obtained App Access Token (for streams)")
+            return self._app_token
+
+    async def _is_stream_live(self, session: aiohttp.ClientSession, cache_seconds: int = 60) -> bool:
+        """Return True if the channel is live. Cached for cache_seconds."""
+        now = time.time()
+        if self._live_status is not None and (now - self._live_checked_at) < cache_seconds:
+            return self._live_status
+        if not self._broadcaster_id:
+            return False
+
+        token = await self._get_app_token(session)
+        headers = {"Client-Id": CLIENT_ID, "Authorization": f"Bearer {token}"}
+        url = f"https://api.twitch.tv/helix/streams?user_id={self._broadcaster_id}"
+        async with session.get(url, headers=headers) as r:
+            if r.status != 200:
+                txt = await r.text()
+                print(f"[DEBUG] streams check failed: {r.status} {txt}")
+                self._live_status = False
+            else:
+                data = await r.json()
+                self._live_status = bool(data.get("data"))
+        self._live_checked_at = now
+        print(f"[DEBUG] Live status: {self._live_status}")
+        return self._live_status
 
     async def _helix_announce(self, session: aiohttp.ClientSession, text: str, color: str = "primary") -> bool:
         """Send a Twitch announcement (colored highlight)."""
@@ -314,6 +360,18 @@ class Bot(commands.Bot):
             while True:
                 try:
                     track = await self.spotify.get_current_track(session)
+
+                    # gate announcements to live streams only (cached 60s)
+                    is_live = await self._is_stream_live(session, cache_seconds=60)
+                    if not is_live:
+                        if track and track["id"] != self._last_track_id:
+                            self._last_track_id = track["id"]
+                            print("[DEBUG] Track changed while OFFLINE; not announcing.")
+                        else:
+                            print("[DEBUG] Stream offline; skipping announcement")
+                        await asyncio.sleep(POLL_SECONDS)
+                        continue
+
                     if track and track["id"] != self._last_track_id:
                         if track["progress_ms"] < 1500:
                             await asyncio.sleep(1.5)
@@ -325,12 +383,8 @@ class Bot(commands.Bot):
 
                         self._last_track_id = track["id"]
                         msg = f"🎶 𝐍𝐨𝐰 𝐏𝐥𝐚𝐲𝐢𝐧𝐠: {track['title']} — {track['artists']}"
-                        print(f"[DEBUG] Sending announcement: {msg}")
-                        # Send as Helix announcement
+                        print(f"[DEBUG] Sending announcement (LIVE): {msg}")
                         await self._helix_announce(session, msg, "purple")
-                        # Optional: also echo via IRC WS client (uncomment if desired)
-                        # if self._irc_ws_client:
-                        #     await self._irc_ws_client.privmsg(msg)
                     else:
                         print("[DEBUG] No new track or nothing playing")
                 except Exception as e:
