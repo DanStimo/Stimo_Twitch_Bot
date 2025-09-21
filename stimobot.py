@@ -481,6 +481,10 @@ async def handle_versus_command(argstr: str) -> str:
         print(f"[versus] error: {e}")
         return "Error fetching opponent stats. Try again in a moment."
 
+# Simple shim so existing call sites work after removing announcements
+async def send_chat_or_announce(irc_client, message: str, force_announce: bool = False):
+    await irc_client.privmsg(message)
+
 # --- Helix + Spotify Bot (kept as-is for announcements) ---
 class Bot(commands.Bot):
     def __init__(self):
