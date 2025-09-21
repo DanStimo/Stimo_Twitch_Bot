@@ -107,6 +107,28 @@ async def validate_token(token: str):
         print(f"❌ Token validate exception: {e}")
         return None
 
+def parse_irc_tags(tag_str: str) -> dict:
+    """Parse the IRC tags blob into a dict."""
+    tags = {}
+    for part in tag_str.split(";"):
+        if not part:
+            continue
+        if "=" in part:
+            k, v = part.split("=", 1)
+            tags[k] = v
+        else:
+            tags[part] = ""
+    return tags
+
+def is_privileged(tags: dict, author: str, channel: str) -> bool:
+    """Allow broadcaster, moderator, or VIP."""
+    badges = (tags.get("badges") or "")
+    is_mod = tags.get("mod") == "1" or "moderator/" in badges
+    # Broadcaster if badge present or user-id matches room-id
+    is_broadcaster = "broadcaster/" in badges or (tags.get("user-id") and tags.get("room-id") and tags["user-id"] == tags["room-id"])
+    is_vip = "vip/" in badges
+    return bool(is_broadcaster or is_mod or is_vip)
+
 # --- Minimal IRC-over-WebSocket client to guarantee viewer-list presence ---
 class SimpleIRCClient:
     def __init__(self, token_oauth: str, login: str, channel: str):
@@ -161,8 +183,15 @@ class SimpleIRCClient:
                                 # Example: :user!user@user.tmi.twitch.tv PRIVMSG #channel :message text
                                 try:
                                     if " PRIVMSG #" in line:
-                                        # Extract channel and message
-                                        prefix, rest = line.split(" PRIVMSG #", 1)
+                                        raw_for_parse = line
+                                        tags = {}
+                                        # If the line starts with @tags, split them off first
+                                        if raw_for_parse.startswith("@"):
+                                            tags_blob, raw_for_parse = raw_for_parse.split(" ", 1)
+                                            tags = parse_irc_tags(tags_blob[1:])
+                                    
+                                        # Now parse prefix/channel/message from the remaining part
+                                        prefix, rest = raw_for_parse.split(" PRIVMSG #", 1)
                                         chan, msgtext = rest.split(" :", 1)
                                         chan = chan.split(" ", 1)[0]
                                         author = prefix.split("!", 1)[0][1:]
@@ -175,10 +204,15 @@ class SimpleIRCClient:
                                             await self.privmsg("pong")
                                     
                                         elif lower.startswith("!versus") or lower.startswith("!vs"):
+                                            # permission gate: broadcaster/mod/VIP only
+                                            if not is_privileged(tags, author, chan):
+                                                # You can silently ignore instead if you prefer
+                                                await self.privmsg("⛔ This command is for the broadcaster, moderators, or VIPs.")
+                                                return
                                             parts = text.split(" ", 1)
                                             argstr = parts[1] if len(parts) > 1 else ""
                                             reply = await handle_versus_command(argstr)
-                                            await send_chat_or_announce(self, reply)  # <- uses /announce if ENABLE_ANNOUNCE=1
+                                            await self.privmsg(reply)
                                     
                                         elif lower.startswith("!eahealth"):
                                             parts = text.split(" ", 1)
