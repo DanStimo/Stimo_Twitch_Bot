@@ -127,15 +127,33 @@ class SimpleIRCClient:
                                         prefix, rest = line.split(" PRIVMSG #", 1)
                                         chan, msgtext = rest.split(" :", 1)
                                         chan = chan.split(" ", 1)[0]
-                                        # Extract author from prefix: starts with ":nick!"
                                         author = prefix.split("!", 1)[0][1:]
                                         print(f"[IRC MSG] #{chan} <{author}> {msgtext}")
-
+                                    
                                         text  = msgtext.strip()
                                         lower = text.lower()
-                                        
+                                    
                                         if lower.startswith("!ping"):
                                             await self.privmsg("pong")
+                                    
+                                        elif lower.startswith("!versus") or lower.startswith("!vs"):
+                                            parts = text.split(" ", 1)
+                                            argstr = parts[1] if len(parts) > 1 else ""
+                                            reply = await handle_versus_command(argstr)
+                                            await self.privmsg(reply)
+                                    
+                                        elif lower.startswith("!eahealth"):
+                                            parts = text.split(" ", 1)
+                                            test_id = (parts[1].strip() if len(parts) > 1 else "167054")  # your club ID as default
+                                            try:
+                                                async with aiohttp.ClientSession() as session:
+                                                    url = f"{EA_BASE}/clubs/overallStats?platform={PLATFORM}&clubIds={test_id}"
+                                                    data = await _http_json(session, url)
+                                                    ok = isinstance(data, list) and len(data) > 0 and "wins" in data[0]
+                                                    await self.privmsg("EA OK ✅" if ok else "EA responded, but structure unexpected ⚠️")
+                                            except Exception as e:
+                                                await self.privmsg("EA FAIL ❌ (see logs)")
+                                                print(f"[EAHealth Error] {e}")
                                         
                                         elif lower.startswith("!versus") or lower.startswith("!vs"):
                                             # Extract args after the command
@@ -240,15 +258,31 @@ def _streak_emoji(v):
     except:
         return "❓"
 
+a# --- Robust HTTP JSON fetch with better diagnostics ---
 async def _http_json(session, url, headers=None):
-    h = {"User-Agent": "Mozilla/5.0"}
-    if headers: h.update(headers)
-    async with session.get(url, headers=h, timeout=15) as r:
-        if r.status != 200:
-            txt = await r.text()
-            raise RuntimeError(f"HTTP {r.status}: {txt[:200]}")
-        return await r.json()
+    h = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.ea.com/",
+        "Origin": "https://www.ea.com",
+    }
+    if headers:
+        h.update(headers)
 
+    try:
+        async with session.get(url, headers=h, timeout=20) as r:
+            txt = await r.text()
+            if r.status != 200:
+                print(f"[EA HTTP] {r.status} for {url}\nBody: {txt[:400]}")
+                raise RuntimeError(f"HTTP {r.status}")
+            try:
+                return await r.json()
+            except Exception as je:
+                print(f"[EA JSON] Failed to parse JSON from {url} | body head: {txt[:400]}")
+                raise RuntimeError("Bad JSON") from je
+    except Exception as e:
+        print(f"[EA NET] {type(e).__name__}: {e} @ {url}")
+        raise
 async def ea_search_clubs(session, name_or_id: str):
     """Return list of leaderboard search results. If numeric, try direct id shim."""
     if name_or_id.isdigit():
