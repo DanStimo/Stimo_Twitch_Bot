@@ -22,27 +22,10 @@ PLATFORM = os.getenv("PLATFORM", "common-gen5")   # EA Pro Clubs platform
 
 ENABLE_ANNOUNCE = os.getenv("ENABLE_ANNOUNCE", "0") == "1"
 ANNOUNCEMENT_COLOR = os.getenv("ANNOUNCEMENT_COLOR", "primary").lower()
-
-_ANNOUNCE_CMDS = {
-    "primary": "/announce",
-    "blue": "/announceblue",
-    "green": "/announcegreen",
-    "orange": "/announceorange",
-    "purple": "/announcepurple",
-}
-
-async def send_chat_or_announce(irc_client, message: str, force_announce: bool=False):
-    """
-    Tries to send an announcement if enabled. Falls back to normal chat if disabled.
-    NOTE: /announce only works if the bot is a mod or the broadcaster.
-    """
-    if (ENABLE_ANNOUNCE or force_announce):
-        cmd = _ANNOUNCE_CMDS.get(ANNOUNCEMENT_COLOR, "/announce")
-        # Keep under typical chat limit—your formatter already truncates to ~480 chars
-        msg = f"{cmd} {message}"
-        await irc_client.privmsg(msg)
-    else:
-        await irc_client.privmsg(message)
+CLIENT_ID = os.getenv("CLIENT_ID")
+HELIX_TOKEN = os.getenv("TWITCH_API_TOKEN")
+BROADCASTER_ID = os.getenv("BROADCASTER_ID")
+MODERATOR_ID = os.getenv("MODERATOR_ID")  # must be the same user as HELIX_TOKEN, and a mod in the channel
 
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 # Optional: seconds to keep the message before auto-delete (0 = keep)
@@ -504,6 +487,40 @@ async def handle_versus_command(argstr: str) -> str:
     except Exception as e:
         print(f"[versus] error: {e}")
         return "Error fetching opponent stats. Try again in a moment."
+
+async def send_chat_announcement_helix(message: str, color: str | None = None) -> bool:
+    """Send a Twitch chat announcement via Helix. Returns True on success."""
+    if not (CLIENT_ID and HELIX_TOKEN and BROADCASTER_ID and MODERATOR_ID):
+        print("[announce] Missing CLIENT_ID/HELIX_TOKEN/BROADCASTER_ID/MODERATOR_ID env")
+        return False
+
+    url = "https://api.twitch.tv/helix/chat/announcements"
+    headers = {
+        "Client-Id": CLIENT_ID,
+        "Authorization": f"Bearer {HELIX_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    params = {"broadcaster_id": BROADCASTER_ID, "moderator_id": MODERATOR_ID}
+    body = {"message": message[:495], "color": (color or ANNOUNCEMENT_COLOR)}
+    async with aiohttp.ClientSession() as s:
+        async with s.post(url, headers=headers, params=params, json=body) as r:
+            if r.status // 100 == 2:
+                return True
+            txt = await r.text()
+            print(f"[announce] HTTP {r.status} {txt[:400]}")
+            return False
+
+async def send_chat_or_announce(irc_client, message: str, force_announce: bool = False):
+    """
+    If ENABLE_ANNOUNCE=1 (or force_announce), try Helix announcement first.
+    Fallback to normal chat on failure.
+    """
+    if ENABLE_ANNOUNCE or force_announce:
+        ok = await send_chat_announcement_helix(message, ANNOUNCEMENT_COLOR)
+        if ok:
+            return
+        print("[announce] Falling back to normal chat")
+    await irc_client.privmsg(message)
 
 # --- Helix + Spotify Bot (kept as-is for announcements) ---
 class Bot(commands.Bot):
