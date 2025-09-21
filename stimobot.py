@@ -401,7 +401,7 @@ def format_versus_line(name, stats, rank, last_line, form, days):
         f"📈 SR {stats['skillRating']} | "
         f"📊 {stats['wins']}-{stats['draws']}-{stats['losses']} | "
         f"🔥 Win Streak: {stats['winStreak']}{_streak_emoji(stats['winStreak'])} • 🛡️ Unbeaten Streak: {stats['unbeatenstreak' if 'unbeatenstreak' in stats else 'unbeatenStreak']}{_streak_emoji(stats['unbeatenStreak'])} | "
-        f"🕘 {last_text} | "
+        f"{last_text} | "
         f"🧭 Form {form_str} | "
         f"⏱️ {days_str}"
     )
