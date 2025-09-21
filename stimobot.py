@@ -21,17 +21,55 @@ POLL_SECONDS = int(os.getenv("SPOTIFY_POLL_SECONDS", "5"))
 PLATFORM = os.getenv("PLATFORM", "common-gen5")   # EA Pro Clubs platform
 
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+# Optional: seconds to keep the message before auto-delete (0 = keep)
+DISCORD_WEBHOOK_TTL_SECONDS = int(os.getenv("DISCORD_WEBHOOK_TTL_SECONDS", "0"))
 
-async def notify_discord_online(bot_name: str):
-    """Send a simple 'bot is online' message to Discord via webhook."""
+async def notify_discord_online(bot_name: str, channels: list[str] | None = None):
+    """
+    Post a 'bot online' message to a Discord channel via webhook and auto-delete after TTL.
+    Set DISCORD_WEBHOOK_TTL_SECONDS to a positive integer to enable auto-deletion.
+    """
     if not DISCORD_WEBHOOK_URL:
         return
-    payload = {"content": f"✅ **{bot_name}** is now online and connected to Twitch chat!"}
-    async with aiohttp.ClientSession() as session:
-        try:
-            await session.post(DISCORD_WEBHOOK_URL, json=payload)
-        except Exception as e:
-            print(f"[Discord notify] Failed: {e}")
+
+    chan_txt = ""
+    if channels:
+        chan_txt = " in " + ", ".join(f"#{c}" for c in channels)
+
+    payload = {
+        "content": f"✅ **{bot_name}** is now online{chan_txt}!",
+        "allowed_mentions": {"parse": []},  # prevent accidental pings
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Use wait=true so Discord returns the message JSON (includes id)
+            async with session.post(f"{DISCORD_WEBHOOK_URL}?wait=true", json=payload) as r:
+                if r.status // 100 != 2:
+                    body = await r.text()
+                    print(f"[Discord notify] HTTP {r.status} body={body[:400]}")
+                    return
+
+                data = await r.json()
+                msg_id = data.get("id")
+
+        # Schedule deletion if TTL is set
+        if DISCORD_WEBHOOK_TTL_SECONDS > 0 and msg_id:
+            async def _delete_later(mid: str, ttl: int):
+                try:
+                    await asyncio.sleep(ttl)
+                    async with aiohttp.ClientSession() as s:
+                        async with s.delete(f"{DISCORD_WEBHOOK_URL}/messages/{mid}") as dr:
+                            if dr.status // 100 != 2:
+                                txt = await dr.text()
+                                print(f"[Discord delete] HTTP {dr.status} body={txt[:400]}")
+                except Exception as de:
+                    print(f"[Discord delete] Failed: {de}")
+
+            asyncio.create_task(_delete_later(msg_id, DISCORD_WEBHOOK_TTL_SECONDS))
+
+    except Exception as e:
+        print(f"[Discord notify] Failed: {e}")
 
 def get_plain_user_token():
     """Return the plain bearer token (no 'oauth:' prefix)."""
@@ -473,7 +511,18 @@ class Bot(commands.Bot):
     async def event_ready(self):
         bot_name = os.getenv("BOT_NAME", "StimoBot")
         print(f"Logged in as {bot_name}")
-        await notify_discord_online(bot_name)
+    
+        # Try to include the channel list if available
+        channels = None
+        if hasattr(self, "channel") and self.channel:
+            channels = [self.channel]                       # your IRC client style
+        elif hasattr(self, "initial_channels") and self.initial_channels:
+            channels = list(self.initial_channels)          # TwitchIO style
+        elif os.getenv("TWITCH_CHANNEL"):
+            channels = [os.getenv("TWITCH_CHANNEL")]        # fallback from env
+    
+        await notify_discord_online(bot_name, channels)     # <- pass channels (optional)
+    
         asyncio.create_task(self.bootstrap_helix_and_run())
 
     async def bootstrap_helix_and_run(self):
