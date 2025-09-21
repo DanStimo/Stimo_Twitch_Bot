@@ -258,7 +258,7 @@ def _streak_emoji(v):
     except:
         return "❓"
 
-a# --- Robust HTTP JSON fetch with better diagnostics ---
+# --- Robust HTTP JSON fetch with better diagnostics ---
 async def _http_json(session, url, headers=None):
     h = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
