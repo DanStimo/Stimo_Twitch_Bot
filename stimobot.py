@@ -383,16 +383,29 @@ async def ea_club_rank(session, club_id: str):
     return "Unranked"
 
 def format_versus_line(name, stats, rank, last_line, form, days):
-    # Twitch-friendly single line (keep it compact)
-    rtxt = f"#{rank}" if isinstance(rank, int) or (isinstance(rank, str) and rank.isdigit()) else "Unranked"
+    # Normalize / prepare pieces
+    rtxt = f"#{rank}" if (isinstance(rank, int) or (isinstance(rank, str) and rank.isdigit())) else "Unranked"
     form_str = "".join(form) if form else "—"
     days_str = f"{days}d" if days is not None else "n/a"
-    return (
-        f"{name.upper()} | Rank {rtxt} | SR {stats['skillRating']} | "
-        f"W-D-L {stats['wins']}-{stats['draws']}-{stats['losses']} | "
-        f"WS {stats['winStreak']}{_streak_emoji(stats['winStreak'])} • UBS {stats['unbeatenStreak']}{_streak_emoji(stats['unbeatenStreak'])} | "
-        f"{last_line} | Form: {form_str} | Last played: {days_str}"
-    )[:480]  # headroom under ~500 chars
+
+    # If ea_last_match_line() still returns "Last: ...", strip that label so we can add our own emoji tag
+    last_text = last_line
+    if isinstance(last_text, str) and last_text.lower().startswith("last:"):
+        last_text = last_text[5:].strip()
+
+    # Compose with section emojis
+    # 🏟️ Club | 🏅 Rank | 📈 SR | 📊 Record | 🔥/🧊 Streaks | 🕘 Last match | 🧭 Form | ⏱️ Last played
+    out = (
+        f"🏟️ {name.upper()} | "
+        f"🏅 Rank {rtxt} | "
+        f"📈 SR {stats['skillRating']} | "
+        f"📊 {stats['wins']}-{stats['draws']}-{stats['losses']} | "
+        f"🔥 Win Streak: {stats['winStreak']}{_streak_emoji(stats['winStreak'])} • 🛡️ Unbeaten Streak: {stats['unbeatenstreak' if 'unbeatenstreak' in stats else 'unbeatenStreak']}{_streak_emoji(stats['unbeatenStreak'])} | "
+        f"🕘 {last_text} | "
+        f"🧭 Form {form_str} | "
+        f"⏱️ {days_str}"
+    )
+    return out[:480]  # keep a little headroom under the limit
 
 # --- Twitch-chat command handler for Pro Clubs ---
 async def handle_versus_command(argstr: str) -> str:
