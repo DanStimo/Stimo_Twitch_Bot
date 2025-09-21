@@ -131,8 +131,19 @@ class SimpleIRCClient:
                                         author = prefix.split("!", 1)[0][1:]
                                         print(f"[IRC MSG] #{chan} <{author}> {msgtext}")
 
-                                        if msgtext.strip().lower() == "!ping":
+                                        text  = msgtext.strip()
+                                        lower = text.lower()
+                                        
+                                        if lower.startswith("!ping"):
                                             await self.privmsg("pong")
+                                        
+                                        elif lower.startswith("!versus") or lower.startswith("!vs"):
+                                            # Extract args after the command
+                                            parts = text.split(" ", 1)
+                                            argstr = parts[1] if len(parts) > 1 else ""
+                                            reply = await handle_versus_command(argstr)
+                                            # keep replies short for Twitch; we already truncate in formatter
+                                            await self.privmsg(reply)
                                 except Exception as e:
                                     print(f"[IRC-WS Parse Error] {e}")
 
@@ -348,6 +359,42 @@ def format_versus_line(name, stats, rank, last_line, form, days):
         f"WS {stats['winStreak']}{_streak_emoji(stats['winStreak'])} • UBS {stats['unbeatenStreak']}{_streak_emoji(stats['unbeatenStreak'])} | "
         f"{last_line} | Form: {form_str} | Last played: {days_str}"
     )[:480]  # headroom under ~500 chars
+
+# --- Twitch-chat command handler for Pro Clubs ---
+async def handle_versus_command(argstr: str) -> str:
+    args = argstr.strip()
+    if not args:
+        return "Usage: !versus <club name or club id>"
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            # 1) search clubs
+            results = await ea_search_clubs(session, args)
+            if not results:
+                return "No matching clubs found."
+
+            # 2) if non-numeric query yields multiple, list top 5 with IDs
+            if not args.isdigit() and len(results) > 1:
+                top = results[:5]
+                listing = " | ".join(f"{i+1}) {c['clubInfo']['name']}[{c['clubInfo']['clubId']}]" for i, c in enumerate(top))
+                return f"Multiple matches: {listing} — re-run with the club ID (e.g. !versus 123456)"
+
+            # 3) choose first result
+            chosen = results[0]
+            club_id = str(chosen['clubInfo']['clubId'])
+            name    = chosen['clubInfo']['name']
+
+            # 4) fetch stats and compose line
+            stats     = await ea_club_stats(session, club_id)
+            form      = await ea_recent_form(session, club_id, n=5)
+            last_line = await ea_last_match_line(session, club_id)
+            days      = await ea_days_since_last(session, club_id)
+            rank      = await ea_club_rank(session, club_id)
+
+            return format_versus_line(name, stats, rank, last_line, form, days)
+    except Exception as e:
+        print(f"[versus] error: {e}")
+        return "Error fetching opponent stats. Try again in a moment."
 
 # --- Helix + Spotify Bot (kept as-is for announcements) ---
 class Bot(commands.Bot):
