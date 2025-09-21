@@ -37,7 +37,7 @@ async def notify_discord_online(bot_name: str, channels: list[str] | None = None
         chan_txt = " in " + ", ".join(f"#{c}" for c in channels)
 
     payload = {
-        "content": f"✅ **{bot_name}** is now online{chan_txt}!",
+        "content": f"✅ **{bot_name}** is now online and connected to Twitch chat!{chan_txt}!",
         "allowed_mentions": {"parse": []},  # prevent accidental pings
     }
 
