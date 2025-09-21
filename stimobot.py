@@ -3,6 +3,7 @@ import asyncio
 import time
 import aiohttp
 from twitchio.ext import commands
+import json
 
 # --- Railway Env Vars ---
 TOKEN               = os.getenv("TOKEN")               # Twitch user token for IRC (must start with oauth:)
@@ -16,6 +17,21 @@ SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 SPOTIFY_REFRESH_TOKEN = os.getenv("SPOTIFY_REFRESH_TOKEN")
 
 POLL_SECONDS = int(os.getenv("SPOTIFY_POLL_SECONDS", "5"))
+
+PLATFORM = os.getenv("PLATFORM", "common-gen5")   # EA Pro Clubs platform
+
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+
+async def notify_discord_online(bot_name: str):
+    """Send a simple 'bot is online' message to Discord via webhook."""
+    if not DISCORD_WEBHOOK_URL:
+        return
+    payload = {"content": f"✅ **{bot_name}** is now online and connected to Twitch chat!"}
+    async with aiohttp.ClientSession() as session:
+        try:
+            await session.post(DISCORD_WEBHOOK_URL, json=payload)
+        except Exception as e:
+            print(f"[Discord notify] Failed: {e}")
 
 def get_plain_user_token():
     """Return the plain bearer token (no 'oauth:' prefix)."""
@@ -203,6 +219,136 @@ class SpotifyClient:
                 "progress_ms": j.get("progress_ms", 0),
             }
 
+# --- EA Pro Clubs helpers (aiohttp) ---
+EA_BASE = "https://proclubs.ea.com/api/fc"
+
+def _streak_emoji(v):
+    try:
+        v = int(v)
+        return "❄️" if v <= 5 else ("🔥" if v <= 9 else "🔥🔥" if v <= 19 else "🔥🔥🔥")
+    except:
+        return "❓"
+
+async def _http_json(session, url, headers=None):
+    h = {"User-Agent": "Mozilla/5.0"}
+    if headers: h.update(headers)
+    async with session.get(url, headers=h, timeout=15) as r:
+        if r.status != 200:
+            txt = await r.text()
+            raise RuntimeError(f"HTTP {r.status}: {txt[:200]}")
+        return await r.json()
+
+async def ea_search_clubs(session, name_or_id: str):
+    """Return list of leaderboard search results. If numeric, try direct id shim."""
+    if name_or_id.isdigit():
+        # Fake a 'search' style object for direct ID usage
+        return [{"clubInfo": {"clubId": int(name_or_id), "name": f"ID:{name_or_id}"}}]
+    q = name_or_id.replace(" ", "%20")
+    url = f"{EA_BASE}/allTimeLeaderboard/search?platform={PLATFORM}&clubName={q}"
+    data = await _http_json(session, url)
+    # Filter out EA's 'None of these'
+    return [c for c in data if c.get("clubInfo", {}).get("name", "").strip().lower() != "none of these"]
+
+async def ea_club_stats(session, club_id: str):
+    url = f"{EA_BASE}/clubs/overallStats?platform={PLATFORM}&clubIds={club_id}"
+    data = await _http_json(session, url)
+    club = data[0] if isinstance(data, list) and data else {}
+    return {
+        "matchesPlayed": club.get("gamesPlayed", "N/A"),
+        "wins": club.get("wins", "N/A"),
+        "draws": club.get("ties", "N/A"),
+        "losses": club.get("losses", "N/A"),
+        "winStreak": club.get("wstreak", "0"),
+        "unbeatenStreak": club.get("unbeatenstreak", "0"),
+        "skillRating": club.get("skillRating", "N/A"),
+    }
+
+async def ea_recent_form(session, club_id: str, n=5):
+    base = f"{EA_BASE}/clubs/matches"
+    forms = []
+    all_matches = []
+    for t in ("leagueMatch", "playoffMatch"):
+        url = f"{base}?matchType={t}&platform={PLATFORM}&clubIds={club_id}"
+        try:
+            all_matches += await _http_json(session, url)
+        except Exception:
+            pass
+    all_matches.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+    for m in all_matches[:n]:
+        clubs = m.get("clubs", {})
+        c = clubs.get(str(club_id), {})
+        opp_id = next((cid for cid in clubs if cid != str(club_id)), None)
+        o = clubs.get(opp_id, {}) if opp_id else {}
+        us = int(c.get("goals", 0))
+        them = int(o.get("goals", 0)) if o else 0
+        forms.append("✅" if us > them else "❌" if us < them else "➖")
+    return forms
+
+async def ea_last_match_line(session, club_id: str):
+    base = f"{EA_BASE}/clubs/matches"
+    all_matches = []
+    for t in ("leagueMatch", "playoffMatch"):
+        url = f"{base}?matchType={t}&platform={PLATFORM}&clubIds={club_id}"
+        try:
+            all_matches += await _http_json(session, url)
+        except Exception:
+            pass
+    if not all_matches:
+        return "Last: n/a"
+    all_matches.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+    m = all_matches[0]
+    clubs = m.get("clubs", {})
+    c = clubs.get(str(club_id), {})
+    opp_id = next((cid for cid in clubs if cid != str(club_id)), None)
+    o = clubs.get(opp_id, {}) if opp_id else {}
+    our = int(c.get("goals", 0))
+    their = int(o.get("goals", 0) if o else 0)
+    opp_name = (o.get("details") or {}).get("name") or o.get("name") or "Unknown"
+    badge = "✅" if our > their else "❌" if our < their else "➖"
+    return f"Last: {badge} vs {opp_name} ({our}-{their})"
+
+async def ea_days_since_last(session, club_id: str):
+    base = f"{EA_BASE}/clubs/matches"
+    all_matches = []
+    for t in ("leagueMatch", "playoffMatch"):
+        url = f"{base}?matchType={t}&platform={PLATFORM}&clubIds={club_id}"
+        try:
+            all_matches += await _http_json(session, url)
+        except Exception:
+            pass
+    if not all_matches:
+        return None
+    all_matches.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+    ts = all_matches[0].get("timestamp", 0)
+    if not ts:
+        return None
+    # ts is epoch seconds (UTC)
+    import time as _time
+    return int(( _time.time() - ts ) // 86400)
+
+async def ea_club_rank(session, club_id: str):
+    url = f"{EA_BASE}/allTimeLeaderboard?platform={PLATFORM}"
+    try:
+        data = await _http_json(session, url)
+        for c in data:
+            if str(c.get("clubId")) == str(club_id):
+                return c.get("rank", "Unranked")
+    except Exception:
+        pass
+    return "Unranked"
+
+def format_versus_line(name, stats, rank, last_line, form, days):
+    # Twitch-friendly single line (keep it compact)
+    rtxt = f"#{rank}" if isinstance(rank, int) or (isinstance(rank, str) and rank.isdigit()) else "Unranked"
+    form_str = "".join(form) if form else "—"
+    days_str = f"{days}d" if days is not None else "n/a"
+    return (
+        f"{name.upper()} | Rank {rtxt} | SR {stats['skillRating']} | "
+        f"W-D-L {stats['wins']}-{stats['draws']}-{stats['losses']} | "
+        f"WS {stats['winStreak']}{_streak_emoji(stats['winStreak'])} • UBS {stats['unbeatenStreak']}{_streak_emoji(stats['unbeatenStreak'])} | "
+        f"{last_line} | Form: {form_str} | Last played: {days_str}"
+    )[:480]  # headroom under ~500 chars
+
 # --- Helix + Spotify Bot (kept as-is for announcements) ---
 class Bot(commands.Bot):
     def __init__(self):
@@ -232,6 +378,7 @@ class Bot(commands.Bot):
 
     async def event_ready(self):
         print(f"✅ Connected as {self.user.name}")
+        await notify_discord_online(self.nick)
         asyncio.create_task(self.bootstrap_helix_and_run())
 
     async def bootstrap_helix_and_run(self):
@@ -391,6 +538,49 @@ class Bot(commands.Bot):
                     print(f"[Spotify Error] {e}")
                 await asyncio.sleep(POLL_SECONDS)
 
+    @commands.command(name="versus", aliases=["vs"])
+    async def versus_cmd(self, ctx: commands.Context, *args):
+        """
+        Usage:
+          !versus <club name>
+          !versus <club id>
+        """
+        if not args:
+            return await ctx.send("Usage: !versus <club name or club id>")
+
+        query = " ".join(args).strip()
+        try:
+            async with aiohttp.ClientSession() as session:
+                # 1) search
+                results = await ea_search_clubs(session, query)
+                if not results:
+                    return await ctx.send("No matching clubs found.")
+
+                # If multiple club-name matches and the user passed a non-numeric query,
+                # list top 5 options with IDs so chatter can re-run with an ID.
+                if not query.isdigit() and len(results) > 1:
+                    top = results[:5]
+                    listing = " | ".join(f"{i+1}) {c['clubInfo']['name']}[{c['clubInfo']['clubId']}]" for i, c in enumerate(top))
+                    return await ctx.send(f"Multiple matches: {listing} — re-run with the club ID (e.g. !versus 123456)")
+
+                # 2) pick the one
+                chosen = results[0]
+                club_id = str(chosen["clubInfo"]["clubId"])
+                name = chosen["clubInfo"]["name"]
+
+                # 3) pull stats + lines
+                stats = await ea_club_stats(session, club_id)
+                form = await ea_recent_form(session, club_id, n=5)
+                last_line = await ea_last_match_line(session, club_id)
+                days = await ea_days_since_last(session, club_id)
+                rank = await ea_club_rank(session, club_id)
+
+                # 4) print compact line
+                line = format_versus_line(name, stats, rank, last_line, form, days)
+                await ctx.send(line)
+        except Exception as e:
+            print(f"[versus] error: {e}")
+            await ctx.send("Error fetching opponent stats. Try again in a moment.")
 
 # --- Run bot ---
 if __name__ == "__main__":
