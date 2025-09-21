@@ -397,13 +397,13 @@ def format_versus_line(name, stats, rank, last_line, form, days):
     # 🏟️ Club | 🏅 Rank | 📈 SR | 📊 Record | 🔥/🧊 Streaks | 🕘 Last match | 🧭 Form | ⏱️ Last played
     out = (
         f"🏟️ {name.upper()} | "
-        f"🏅 Rank {rtxt} | "
-        f"📈 SR {stats['skillRating']} | "
+        f"🏅 Rank: {rtxt} | "
+        f"📈 SR: {stats['skillRating']} | "
         f"📊 {stats['wins']}-{stats['draws']}-{stats['losses']} | "
-        f"🔥 Win Streak: {stats['winStreak']}{_streak_emoji(stats['winStreak'])} • 🛡️ Unbeaten Streak: {stats['unbeatenstreak' if 'unbeatenstreak' in stats else 'unbeatenStreak']}{_streak_emoji(stats['unbeatenStreak'])} | "
-        f"{last_text} | "
-        f"🧭 Form {form_str} | "
-        f"⏱️ {days_str}"
+        f"Win Streak: {stats['winStreak']}{_streak_emoji(stats['winStreak'])} • Unbeaten Streak: {stats['unbeatenstreak' if 'unbeatenstreak' in stats else 'unbeatenStreak']}{_streak_emoji(stats['unbeatenStreak'])} | "
+        f"Last Match: {last_text} | "
+        f"🧭 Form: {form_str} | "
+        f"⏱️Last Active: {days_str}"
     )
     return out[:480]  # keep a little headroom under the limit
 
