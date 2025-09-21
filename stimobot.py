@@ -377,8 +377,9 @@ class Bot(commands.Bot):
         self._live_checked_at = 0.0     # epoch seconds
 
     async def event_ready(self):
-        print(f"✅ Connected as {self.user.name}")
-        await notify_discord_online(self.nick)
+        bot_name = os.getenv("BOT_NAME", "StimoBot")
+        print(f"Logged in as {bot_name}")
+        await notify_discord_online(bot_name)
         asyncio.create_task(self.bootstrap_helix_and_run())
 
     async def bootstrap_helix_and_run(self):
