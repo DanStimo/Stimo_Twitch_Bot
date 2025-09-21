@@ -4,6 +4,7 @@ import time
 import aiohttp
 from twitchio.ext import commands
 import json
+import unicodedata
 
 # --- Railway Env Vars ---
 TOKEN               = os.getenv("TOKEN")               # Twitch user token for IRC (must start with oauth:)
@@ -108,7 +109,6 @@ async def validate_token(token: str):
         return None
 
 def parse_irc_tags(tag_str: str) -> dict:
-    """Parse the IRC tags blob into a dict."""
     tags = {}
     for part in tag_str.split(";"):
         if not part:
@@ -120,13 +120,23 @@ def parse_irc_tags(tag_str: str) -> dict:
             tags[part] = ""
     return tags
 
-def is_privileged(tags: dict, author: str, channel: str) -> bool:
-    """Allow broadcaster, moderator, or VIP."""
-    badges = (tags.get("badges") or "")
-    is_mod = tags.get("mod") == "1" or "moderator/" in badges
-    # Broadcaster if badge present or user-id matches room-id
-    is_broadcaster = "broadcaster/" in badges or (tags.get("user-id") and tags.get("room-id") and tags["user-id"] == tags["room-id"])
-    is_vip = "vip/" in badges
+def _parse_badges(badges_str: str | None) -> dict:
+    out = {}
+    for item in (badges_str or "").split(","):
+        if not item:
+            continue
+        k, _, v = item.partition("/")
+        if k:
+            out[k] = v or "1"
+    return out
+
+def is_privileged(tags: dict) -> bool:
+    badges = _parse_badges(tags.get("badges"))
+    is_broadcaster = "broadcaster" in badges or (
+        tags.get("user-id") and tags.get("room-id") and tags["user-id"] == tags["room-id"]
+    )
+    is_mod = tags.get("mod") == "1" or "moderator" in badges
+    is_vip = "vip" in badges
     return bool(is_broadcaster or is_mod or is_vip)
 
 # --- Minimal IRC-over-WebSocket client to guarantee viewer-list presence ---
@@ -197,16 +207,18 @@ class SimpleIRCClient:
                                         author = prefix.split("!", 1)[0][1:]
                                         print(f"[IRC MSG] #{chan} <{author}> {msgtext}")
                                     
-                                        text  = msgtext.strip()
+                                        text_raw = msgtext
+                                        text = unicodedata.normalize("NFKC", text_raw).strip()
                                         lower = text.lower()
                                     
                                         if lower.startswith("!ping"):
                                             await self.privmsg("pong")
                                     
                                         elif lower.startswith("!versus") or lower.startswith("!vs"):
-                                            # permission gate: broadcaster/mod/VIP only
-                                            if not is_privileged(tags, author, chan):
-                                                # You can silently ignore instead if you prefer
+                                            allowed = is_privileged(tags)
+                                            print(f"[perm] {author} badges='{tags.get('badges')}' mod={tags.get('mod')} "
+                                                  f"user-id={tags.get('user-id')} room-id={tags.get('room-id')} -> allowed={allowed}")
+                                            if not allowed:
                                                 await self.privmsg("⛔ This command is for the broadcaster, moderators, or VIPs.")
                                                 return
                                             parts = text.split(" ", 1)
