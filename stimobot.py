@@ -20,6 +20,30 @@ POLL_SECONDS = int(os.getenv("SPOTIFY_POLL_SECONDS", "5"))
 
 PLATFORM = os.getenv("PLATFORM", "common-gen5")   # EA Pro Clubs platform
 
+ENABLE_ANNOUNCE = os.getenv("ENABLE_ANNOUNCE", "0") == "1"
+ANNOUNCEMENT_COLOR = os.getenv("ANNOUNCEMENT_COLOR", "primary").lower()
+
+_ANNOUNCE_CMDS = {
+    "primary": "/announce",
+    "blue": "/announceblue",
+    "green": "/announcegreen",
+    "orange": "/announceorange",
+    "purple": "/announcepurple",
+}
+
+async def send_chat_or_announce(irc_client, message: str, force_announce: bool=False):
+    """
+    Tries to send an announcement if enabled. Falls back to normal chat if disabled.
+    NOTE: /announce only works if the bot is a mod or the broadcaster.
+    """
+    if (ENABLE_ANNOUNCE or force_announce):
+        cmd = _ANNOUNCE_CMDS.get(ANNOUNCEMENT_COLOR, "/announce")
+        # Keep under typical chat limit—your formatter already truncates to ~480 chars
+        msg = f"{cmd} {message}"
+        await irc_client.privmsg(msg)
+    else:
+        await irc_client.privmsg(message)
+
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 # Optional: seconds to keep the message before auto-delete (0 = keep)
 DISCORD_WEBHOOK_TTL_SECONDS = int(os.getenv("DISCORD_WEBHOOK_TTL_SECONDS", "0"))
@@ -178,7 +202,7 @@ class SimpleIRCClient:
                                             parts = text.split(" ", 1)
                                             argstr = parts[1] if len(parts) > 1 else ""
                                             reply = await handle_versus_command(argstr)
-                                            await self.privmsg(reply)
+                                            await send_chat_or_announce(self, reply)  # <- uses /announce if ENABLE_ANNOUNCE=1
                                     
                                         elif lower.startswith("!eahealth"):
                                             parts = text.split(" ", 1)
