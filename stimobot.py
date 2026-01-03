@@ -232,7 +232,8 @@ class SimpleIRCClient:
                                             try:
                                                 async with aiohttp.ClientSession() as session:
                                                     url = f"{EA_BASE}/clubs/overallStats?platform={PLATFORM}&clubIds={test_id}"
-                                                    data = await _http_json(session, url)
+                                                    print("[EA DEBUG] About to call:", url)
+                                                    data = await _http_json(session, url, headers=EA_HEADERS)
                                                     ok = isinstance(data, list) and len(data) > 0 and "wins" in data[0]
                                                     await self.privmsg("EA OK ✅" if ok else "EA responded, but structure unexpected ⚠️")
                                             except Exception as e:
@@ -361,6 +362,7 @@ async def _http_json(session, url, headers=None):
     if headers:
         h.update(headers)
 
+    print("[EA DEBUG] Headers:", h)
     async with session.get(url, headers=h, timeout=20) as r:
         txt = await r.text()
         if r.status != 200:
@@ -375,13 +377,13 @@ async def ea_search_clubs(session, name_or_id: str):
         return [{"clubInfo": {"clubId": int(name_or_id), "name": f"ID:{name_or_id}"}}]
     q = name_or_id.replace(" ", "%20")
     url = f"{EA_BASE}/allTimeLeaderboard/search?platform={PLATFORM}&clubName={q}"
-    data = await _http_json(session, url)
+    data = await _http_json(session, url, headers=EA_HEADERS)
     # Filter out EA's 'None of these'
     return [c for c in data if c.get("clubInfo", {}).get("name", "").strip().lower() != "none of these"]
 
 async def ea_club_stats(session, club_id: str):
     url = f"{EA_BASE}/clubs/overallStats?platform={PLATFORM}&clubIds={club_id}"
-    data = await _http_json(session, url)
+    data = await _http_json(session, url, headers=EA_HEADERS)
     club = data[0] if isinstance(data, list) and data else {}
     return {
         "matchesPlayed": club.get("gamesPlayed", "N/A"),
@@ -459,7 +461,7 @@ async def ea_days_since_last(session, club_id: str):
 async def ea_club_rank(session, club_id: str):
     url = f"{EA_BASE}/allTimeLeaderboard?platform={PLATFORM}"
     try:
-        data = await _http_json(session, url)
+        data = await _http_json(session, url, headers=EA_HEADERS)
         for c in data:
             if str(c.get("clubId")) == str(club_id):
                 return c.get("rank", "Unranked")
