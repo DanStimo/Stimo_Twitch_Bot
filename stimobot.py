@@ -343,30 +343,31 @@ def _streak_emoji(v):
         return "❓"
 
 # --- Robust HTTP JSON fetch with better diagnostics ---
+EA_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-GB,en;q=0.9",
+    "Origin": "https://www.ea.com",
+    "Referer": "https://www.ea.com/ea-sports-fc/pro-clubs",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Sec-Fetch-Site": "same-site",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Dest": "empty",
+}
+
 async def _http_json(session, url, headers=None):
-    h = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "Accept": "application/json, text/plain, */*",
-        "Referer": "https://www.ea.com/",
-        "Origin": "https://www.ea.com",
-    }
+    h = dict(EA_HEADERS)
     if headers:
         h.update(headers)
 
-    try:
-        async with session.get(url, headers=h, timeout=20) as r:
-            txt = await r.text()
-            if r.status != 200:
-                print(f"[EA HTTP] {r.status} for {url}\nBody: {txt[:400]}")
-                raise RuntimeError(f"HTTP {r.status}")
-            try:
-                return await r.json()
-            except Exception as je:
-                print(f"[EA JSON] Failed to parse JSON from {url} | body head: {txt[:400]}")
-                raise RuntimeError("Bad JSON") from je
-    except Exception as e:
-        print(f"[EA NET] {type(e).__name__}: {e} @ {url}")
-        raise
+    async with session.get(url, headers=h, timeout=20) as r:
+        txt = await r.text()
+        if r.status != 200:
+            print(f"[EA HTTP] {r.status} for {url}\nBody: {txt[:400]}")
+            raise RuntimeError(f"HTTP {r.status}")
+        return await r.json()
+
 async def ea_search_clubs(session, name_or_id: str):
     """Return list of leaderboard search results. If numeric, try direct id shim."""
     if name_or_id.isdigit():
