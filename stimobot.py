@@ -739,7 +739,7 @@ class Bot(commands.Bot):
                     print(f"[Spotify Error] {e}")
                 await asyncio.sleep(POLL_SECONDS)
 
-   @commands.command(name="versus", aliases=["vs"])
+    @commands.command(name="versus", aliases=["vs"])
     async def versus_cmd(self, ctx: commands.Context, *args):
         if DISABLE_VERSUS:
             return await ctx.send("⚠️ !vs/!versus is temporarily disabled.")
