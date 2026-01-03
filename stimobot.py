@@ -20,6 +20,7 @@ SPOTIFY_REFRESH_TOKEN = os.getenv("SPOTIFY_REFRESH_TOKEN")
 POLL_SECONDS = int(os.getenv("SPOTIFY_POLL_SECONDS", "5"))
 
 PLATFORM = os.getenv("PLATFORM", "common-gen5")   # EA Pro Clubs platform
+DISABLE_VERSUS = os.getenv("DISABLE_VERSUS", "0").lower() in ("1", "true", "yes", "on")
 
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 # Optional: seconds to keep the message before auto-delete (0 = keep)
@@ -215,6 +216,9 @@ class SimpleIRCClient:
                                             await self.privmsg("pong")
                                     
                                         elif lower.startswith("!versus") or lower.startswith("!vs"):
+                                            if DISABLE_VERSUS:
+                                                await self.privmsg("⚠️ !vs/!versus is temporarily disabled.")
+                                                continue
                                             allowed = is_privileged(tags)
                                             print(f"[perm] {author} badges='{tags.get('badges')}' mod={tags.get('mod')} "
                                                   f"user-id={tags.get('user-id')} room-id={tags.get('room-id')} -> allowed={allowed}")
@@ -240,6 +244,9 @@ class SimpleIRCClient:
                                                 print(f"[EAHealth Error] {e}")
                                         
                                         elif lower.startswith("!versus") or lower.startswith("!vs"):
+                                            if DISABLE_VERSUS:
+                                                await self.privmsg("⚠️ !vs/!versus is temporarily disabled.")
+                                                continue
                                             # Extract args after the command
                                             parts = text.split(" ", 1)
                                             argstr = parts[1] if len(parts) > 1 else ""
@@ -732,8 +739,11 @@ class Bot(commands.Bot):
                     print(f"[Spotify Error] {e}")
                 await asyncio.sleep(POLL_SECONDS)
 
-    @commands.command(name="versus", aliases=["vs"])
+   @commands.command(name="versus", aliases=["vs"])
     async def versus_cmd(self, ctx: commands.Context, *args):
+        if DISABLE_VERSUS:
+            return await ctx.send("⚠️ !vs/!versus is temporarily disabled.")
+    
         """
         Usage:
           !versus <club name>
@@ -741,7 +751,7 @@ class Bot(commands.Bot):
         """
         if not args:
             return await ctx.send("Usage: !versus <club name or club id>")
-
+    
         query = " ".join(args).strip()
         try:
             async with aiohttp.ClientSession() as session:
