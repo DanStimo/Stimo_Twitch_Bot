@@ -1,5 +1,6 @@
 twitchio>=2.10.0
-httpx
 rapidfuzz
 discord.py
 twitchio[starlette]
+httpx[http2]>=0.27.0
+
